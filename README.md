@@ -41,8 +41,9 @@
 3. 앱 목록에서 **Gilkok**을 실행하고, 처음 화면에서 **지도 켜기**를 눌러 외부 지도 이용에 동의합니다.
 
 ### 개발용: 소스 빌드
+0. Android Studio `Tools → SDK Manager → SDK Platforms`에서 **Android 37**을 설치합니다 (차량 API 파일이 여기 포함되어 없으면 빌드 실패). Pleos Connect 에뮬레이터(API 34)도 필요합니다.
 1. Android Studio로 이 저장소를 엽니다 (Gradle Sync 완료까지 대기).
-2. (선택) `local.properties` 맨 아래에 TourAPI 키를 추가합니다. 없으면 명소는 데모 데이터로 표시됩니다.
+2. (선택) 저장소 최상위 폴더(`build.gradle.kts`와 같은 위치)의 `local.properties` 맨 아래에 TourAPI 키를 추가합니다. 이 파일은 Android Studio가 처음 열 때 자동으로 만들고, 저장소에는 올라가지 않습니다. 키가 없으면 명소는 데모 데이터로 표시됩니다.
    ```
    TOUR_API_KEY=발급받은_인증키
    ```

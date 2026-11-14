@@ -104,6 +104,8 @@ app/src/main/java/com/example/gilkok/
 ## 6. 개발 환경과 실행
 
 - Android Studio + **Pleos Connect v2.1.0 에뮬레이터 (API 34)**. minSdk 28, compileSdk 37
+- **SDK Platform 37 설치 필수:** `Tools → SDK Manager → SDK Platforms → Android 37` 체크 후 설치. 차량 API(`android.car.jar`)를 여기서 가져오므로 없으면 빌드 실패
+- 첫 빌드 때 인터넷 필요 (Pleos SDK 저장소 `nexus-playground.pleos.ai`, MapLibre 등 다운로드)
 - 빠른 반영: 에뮬레이터를 켠 상태에서 `새로고침.bat` 더블클릭 (빌드 → 설치 → 앱 재실행)
 - 테스트: `./gradlew test` (`RouteEngineTest`, `EnergyModelTest`, `TripAnalyzerTest`)
 - 키: `local.properties`에 `TOUR_API_KEY=...` (저장소에 올리지 않음). 제출용 서명은 `RELEASE_STORE_FILE` 등 (`app/build.gradle.kts` 참고)
