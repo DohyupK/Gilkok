@@ -1,0 +1,33 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/app/build
+/app/release
+*.apk
+*.aab
+*.jks
+*.keystore
+navi_log.txt
+
+# IDE 개인 설정·임시 파일
+/.idea/
+/.kotlin/
+*.log
+gilkok-check.png
+
+# 개발 중 참고 자료 (제출 저장소에서 제외)
+/docs/handoff-evidence/
+/docs/AI_HANDOFF_SNAPSHOT.json
+/docs/README_old.md
