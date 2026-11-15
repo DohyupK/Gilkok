@@ -14,10 +14,10 @@
         <com.google.android.material.button.MaterialButton android:id="@+id/nav_route" style="@style/Widget.Gilkok.Button.Nav"
             android:layout_width="match_parent" android:layout_height="80dp" android:text="경로" android:layout_marginBottom="8dp"
             app:icon="@drawable/ic_nav_route" app:iconGravity="textTop" app:iconPadding="4dp" app:iconSize="22dp" app:iconTint="@null"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/nav_trip" style="@style/Widget.Gilkok.Button.Nav"
+        <com.google.android.material.button.MaterialButton android:id="@+id/nav_trip" style="@style/Widget.Gilkok.Button.Nav" android:visibility="gone"
             android:layout_width="match_parent" android:layout_height="80dp" android:text="주행" android:layout_marginBottom="8dp"
             app:icon="@drawable/ic_nav_trip" app:iconGravity="textTop" app:iconPadding="4dp" app:iconSize="22dp" app:iconTint="@null"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/nav_report" style="@style/Widget.Gilkok.Button.Nav"
+        <com.google.android.material.button.MaterialButton android:id="@+id/nav_report" style="@style/Widget.Gilkok.Button.Nav" android:visibility="gone"
             android:layout_width="match_parent" android:layout_height="80dp" android:text="분석"
             app:icon="@drawable/ic_nav_report" app:iconGravity="textTop" app:iconPadding="4dp" app:iconSize="22dp" app:iconTint="@null"/>
         <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>

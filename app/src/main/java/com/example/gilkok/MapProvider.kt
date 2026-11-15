@@ -29,6 +29,8 @@ interface MapProvider {
     fun display(location: GeoPoint?, destination: Place?, koks: List<KokPoint>)
     fun showRoutes(routes: List<RouteOption>, selected: Int)
     fun showPois(pois: List<Poi>, highlighted: Int?)
+    /** 고른 경로를 잠깐 굵게 강조 (정차 중에만 호출됨) */
+    fun pulseRoute(index: Int)
     fun focus(point: GeoPoint,followLocation:Boolean=false)
     fun zoomBy(amount: Double)
     fun setRestricted(restricted: Boolean)
@@ -95,12 +97,15 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
             val json="""{"version":8,"glyphs":"https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf","sources":{"osm":{"type":"raster","tiles":[$url],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#9AA7B4"}},{"id":"osm","type":"raster","source":"osm","paint":{"raster-fade-duration":0,"raster-opacity":0.88,"raster-saturation":-0.35,"raster-contrast":-0.08}}]}"""
             value.setStyle(Style.Builder().fromJson(json)) { loaded ->
                 style=loaded
-                (listOf("current","destination","kok","place-wp","route-base","route-gil","poi-hl","poi-link")+(1..POI_SLOTS).map { "poi-$it" }).forEach { loaded.addSource(GeoJsonSource(it,empty())) }
+                (listOf("current","destination","kok","place-wp","route-base","route-gil","route-top","poi-hl","poi-link")+(1..POI_SLOTS).map { "poi-$it" }).forEach { loaded.addSource(GeoJsonSource(it,empty())) }
                 // 두 경로 모두 굵게: 고른 경로가 조금 더 굵고 위에 그려짐. 굵기는 draw()에서 직접 바꿈.
                 loaded.addLayer(LineLayer("route-base-casing","route-base").withProperties(lineColor("#FFFFFF"),lineWidth(14f),lineCap("round"),lineJoin("round")))
                 loaded.addLayer(LineLayer("route-base-line","route-base").withProperties(lineColor(ROUTE_BASE),lineWidth(9f),lineCap("round"),lineJoin("round")))
                 loaded.addLayer(LineLayer("route-gil-casing","route-gil").withProperties(lineColor("#FFFFFF"),lineWidth(14f),lineCap("round"),lineJoin("round")))
                 loaded.addLayer(LineLayer("route-gil-line","route-gil").withProperties(lineColor(ROUTE_GIL),lineWidth(9f),lineCap("round"),lineJoin("round")))
+                // 고른 경로를 맨 위에 한 번 더 그림 → 두 경로가 겹친 구간에서도 고른 경로 색이 보임 (레이어 순서는 바꾸지 않음)
+                loaded.addLayer(LineLayer("route-top-casing","route-top").withProperties(lineColor("#FFFFFF"),lineWidth(17f),lineCap("round"),lineJoin("round")))
+                loaded.addLayer(LineLayer("route-top-line","route-top").withProperties(lineColor(ROUTE_GIL),lineWidth(11f),lineCap("round"),lineJoin("round")))
                 // 고른 명소 ↔ 경로의 가장 가까운 지점: 점선
                 loaded.addLayer(LineLayer("poi-link-line","poi-link").withProperties(lineColor(PLACE),lineWidth(4f),lineDasharray(arrayOf(1.5f,1.5f))))
                 // 고른 명소: 크게 + 바깥 고리
@@ -111,7 +116,7 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
                 loaded.addLayer(CircleLayer("destination-point","destination").withProperties(circleColor(DEST),circleRadius(13f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(3f)))
                 loaded.addLayer(CircleLayer("current-halo","current").withProperties(circleColor("#1677FF"),circleRadius(23f),circleOpacity(.17f)))
                 loaded.addLayer(CircleLayer("current-dot","current").withProperties(circleColor("#1677FF"),circleRadius(12f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(4f)))
-                renderKey=""; overlayKey=""; draw()
+                renderKey=""; overlayKey=""; draw(); fitRoutes()
                 pendingFocus?.let { move(it,15.0); pendingFocus=null }
                 onStatus("지도가 준비되었습니다"); onViewportChanged?.invoke()
             }
@@ -140,13 +145,21 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
     override fun showRoutes(routes:List<RouteOption>,selected:Int) {
         this.routes=routes;this.selected=selected
         draw()
+        fitPending=true
+        fitRoutes()
+    }
+    /** 전체 경로가 화면에 들어오게 맞춤. 지도가 아직 준비 안 됐거나 크기가 0이면 준비된 뒤 다시 시도. */
+    private var fitPending=false
+    private fun fitRoutes() {
         val points=routes.flatMap { it.path }
-        if(points.size>=2 && ready && !restricted) {
-            runCatching {
-                val bounds=LatLngBounds.Builder().apply { points.forEach { include(LatLng(it.latitude,it.longitude)) } }.build()
-                userMoved=true
-                map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,120),600)
-            }
+        if(!fitPending || points.size<2 || restricted) return
+        if(!ready || mapView.width==0 || mapView.height==0) { mapView.post { if(ready && mapView.width>0) fitRoutes() }; return }
+        fitPending=false
+        runCatching {
+            val bounds=LatLngBounds.Builder().apply { points.forEach { include(LatLng(it.latitude,it.longitude)) } }.build()
+            val pad=(minOf(mapView.width,mapView.height)*0.12).toInt().coerceIn(40,140)
+            userMoved=true
+            map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,pad,pad+dp(60),pad,pad),500)
         }
     }
     private fun dp(v:Int)=(v*context.resources.displayMetrics.density).toInt()
@@ -242,10 +255,27 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
             userMoved=true; map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,120),500)
         }
     }
+    private val pulseHandler=android.os.Handler(android.os.Looper.getMainLooper())
+    override fun pulseRoute(index:Int) {
+        val style=style ?: return
+        if(restricted) return
+        val prefix=if(index==selected) "route-top" else if(index==0) "route-base" else "route-gil"
+        pulseHandler.removeCallbacksAndMessages(null)
+        // 굵기를 단계적으로 키웠다가 원래대로 (데이터 기반 표현식 없이 setProperties만 사용)
+        val steps=listOf(13f to 19f, 16f to 22f, 13f to 19f, 11f to 16f)
+        steps.forEachIndexed { n,(line,casing) ->
+            pulseHandler.postDelayed({
+                style.getLayer("$prefix-line")?.setProperties(lineWidth(line))
+                style.getLayer("$prefix-casing")?.setProperties(lineWidth(casing))
+            },n*120L)
+        }
+        pulseHandler.postDelayed({ applyRouteWidths(style) },steps.size*120L+80)
+    }
     private fun applyRouteWidths(style:Style) {
         fun set(id:String,on:Boolean,casing:Boolean) { style.getLayer(id)?.setProperties(lineWidth(if(casing) (if(on) 17f else 13f) else (if(on) 11f else 7.5f))) }
         set("route-base-casing",selected==0,true); set("route-base-line",selected==0,false)
         set("route-gil-casing",selected==1,true); set("route-gil-line",selected==1,false)
+        style.getLayer("route-top-casing")?.setProperties(lineWidth(17f)); style.getLayer("route-top-line")?.setProperties(lineWidth(11f))
     }
     private fun draw() {
         val style=style ?: return
@@ -258,6 +288,9 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
             style.getSourceAs<GeoJsonSource>("place-wp")?.setGeoJson(collection(koks.filter { it.place }.map { pointFeature(it.point) }))
             style.getSourceAs<GeoJsonSource>("route-base")?.setGeoJson(collection(listOfNotNull(routes.getOrNull(0)?.takeIf { it.path.size>=2 }).map { lineFeature(it.path) }))
             style.getSourceAs<GeoJsonSource>("route-gil")?.setGeoJson(collection(listOfNotNull(routes.getOrNull(1)?.takeIf { it.path.size>=2 }).map { lineFeature(it.path) }))
+            val top=routes.getOrNull(selected)?.takeIf { it.path.size>=2 && routes.count { r -> r.path.size>=2 }>=2 }
+            style.getSourceAs<GeoJsonSource>("route-top")?.setGeoJson(collection(listOfNotNull(top).map { lineFeature(it.path) }))
+            style.getLayer("route-top-line")?.setProperties(lineColor(if(selected==0) ROUTE_BASE else ROUTE_GIL))
             applyRouteWidths(style)
             (1..POI_SLOTS).forEach { n -> style.getSourceAs<GeoJsonSource>("poi-$n")?.setGeoJson(collection(listOfNotNull(pois.getOrNull(n-1)).map { pointFeature(it.point) })) }
             val hl=highlighted?.let { pois.getOrNull(it) }

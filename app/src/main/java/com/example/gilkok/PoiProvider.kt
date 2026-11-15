@@ -32,7 +32,9 @@ data class Poi(
     val routeFraction: Double,  // 경로상 위치 0(출발)~1(도착)
     val demo: Boolean,
     val description: String = "",  // 한두 줄 소개 (TourAPI 개요)
-    val offRouteM: Double = 0.0,   // 경로에서 떨어진 직선거리
+    val offRouteM: Double = 0.0,
+    val category: String = "",     // 카페, 박물관, 공원 같은 짧은 분류
+    val imageUrl: String = "",     // 대표 이미지 (TourAPI firstimage, https 로 변환)   // 경로에서 떨어진 직선거리
     val nearestOnRoute: GeoPoint = point, // 경로 위에서 가장 가까운 지점 (지도 점선용)
 )
 
@@ -43,6 +45,20 @@ interface PoiProvider {
 }
 
 /** 경로 주변 명소 점수 매기기: 추가 시간 → 경로 중간~도착 근처 → 사진 있는 곳. */
+/** TourAPI 분류 코드(cat2/cat3) → 짧은 카테고리 이름. 모르는 코드는 상위 분류로 대체. */
+object PoiCategory {
+    private val cat3 = mapOf(
+        "A05020900" to "카페", "A05020100" to "한식", "A05020200" to "양식", "A05020300" to "일식", "A05020400" to "중식",
+        "A02060100" to "박물관", "A02060200" to "기념관", "A02060300" to "전시관", "A02060500" to "미술관", "A02060600" to "공연장",
+        "A02020700" to "공원", "A02010100" to "궁", "A02010800" to "사찰", "A02050200" to "전망대",
+    )
+    private val cat2 = mapOf(
+        "A0101" to "자연", "A0102" to "자연", "A0201" to "역사", "A0202" to "휴양", "A0203" to "체험", "A0204" to "산업",
+        "A0205" to "건축물", "A0206" to "문화시설", "A0207" to "축제", "A0208" to "공연·행사", "A0502" to "음식점",
+    )
+    fun name(c2: String, c3: String): String = cat3[c3] ?: cat2[c2] ?: ""
+}
+
 object PoiRanker {
     const val MAX_DETOUR_MIN = 15
     const val LIMIT = 5
@@ -139,6 +155,8 @@ class TourPoiProvider(context: Context, private val key: String) : PoiProvider {
             if (theme.cat1 != null && o.optString("cat1") != theme.cat1) return@mapNotNull null
             val p = GeoPoint(o.optString("mapy").toDoubleOrNull() ?: return@mapNotNull null, o.optString("mapx").toDoubleOrNull() ?: return@mapNotNull null)
             PoiRanker.place(route, o.optString("contentid"), o.optString("title"), p, o.optString("addr1"), o.optString("firstimage").isNotBlank(), false)
+                ?.copy(category = PoiCategory.name(o.optString("cat2"), o.optString("cat3")),
+                    imageUrl = o.optString("firstimage").ifBlank { o.optString("firstimage2") }.replace("http://", "https://"))
         }
     }
 
@@ -186,6 +204,10 @@ class DemoPoiProvider : PoiProvider {
         PoiTheme.FOOD to listOf("성수 카페거리" to GeoPoint(37.5430, 127.0560), "청담 레스토랑 거리" to GeoPoint(37.5240, 127.0500)),
         PoiTheme.EVENTS to listOf("코엑스 전시장" to GeoPoint(37.5125, 127.0590)),
     )
+    private val categories = mapOf(
+        "봉은사" to "사찰", "서울숲 갤러리" to "전시관", "청담 미술관 거리" to "미술관", "뚝섬한강공원" to "공원", "서울숲" to "공원",
+        "청담한강공원" to "공원", "성수 카페거리" to "카페", "청담 레스토랑 거리" to "음식점", "코엑스 전시장" to "전시·박람회",
+    )
     private val notes = mapOf(
         "봉은사" to "도심 속 천년 고찰. 코엑스 맞은편이라 도착 직전 잠깐 들르기 좋아요.",
         "서울숲 갤러리" to "서울숲 입구의 작은 전시 공간.",
@@ -198,7 +220,7 @@ class DemoPoiProvider : PoiProvider {
         "코엑스 전시장" to "전시·박람회가 자주 열리는 곳. 목적지와 같은 건물이에요.",
     )
     override fun search(route: RouteOption, theme: PoiTheme, callback: (Result<List<Poi>>) -> Unit) {
-        val items = samples[theme].orEmpty().mapIndexedNotNull { i, (name, p) -> PoiRanker.place(route, "demo-${theme.name}-$i", name, p, "데모 데이터", true, true)?.copy(description = notes[name].orEmpty()) }
+        val items = samples[theme].orEmpty().mapIndexedNotNull { i, (name, p) -> PoiRanker.place(route, "demo-${theme.name}-$i", name, p, "데모 데이터", true, true)?.copy(description = notes[name].orEmpty(), category = categories[name].orEmpty()) }
         main.postDelayed({ callback(Result.success(PoiRanker.rank(items))) }, 300)
     }
 }
@@ -206,4 +228,32 @@ class DemoPoiProvider : PoiProvider {
 object PoiSettings {
     fun provider(context: Context): PoiProvider =
         if (BuildConfig.TOUR_API_KEY.isNotBlank() && ExternalServices.allowed(context)) TourPoiProvider(context, BuildConfig.TOUR_API_KEY) else DemoPoiProvider()
+}
+
+/** 명소 대표 이미지: 외부 지도 동의 후에만 받고, 메모리에 잠깐 보관. 실패하면 이미지 없이 표시. */
+object PoiImages {
+    private val cache = android.util.LruCache<String, android.graphics.Bitmap>(12)
+    private val main = Handler(Looper.getMainLooper())
+    fun load(context: Context, url: String, callback: (android.graphics.Bitmap?) -> Unit) {
+        if (url.isBlank() || !ExternalServices.allowed(context)) { callback(null); return }
+        cache.get(url)?.let { callback(it); return }
+        ExternalServices.client(context).newCall(Request.Builder().url(url).build()).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { main.post { callback(null) } }
+            override fun onResponse(call: Call, response: Response) {
+                val bmp = runCatching {
+                    response.use { r ->
+                        val bytes = r.body?.bytes() ?: return@use null
+                        // 차량 화면용으로 줄여서 디코딩 (메모리 절약)
+                        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                        var sample = 1
+                        while (bounds.outWidth / (sample * 2) >= 640) sample *= 2
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+                    }
+                }.getOrNull()
+                if (bmp != null) cache.put(url, bmp)
+                main.post { callback(bmp) }
+            }
+        })
+    }
 }

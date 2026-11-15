@@ -11,9 +11,21 @@ if not defined JAVA_HOME (
   exit /b 1
 )
 set "ADB=%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"
-echo [1/2] 빌드하고 에뮬레이터에 설치하는 중...
-call gradlew.bat installDebug
+rem 에뮬레이터가 켜져 있는지 먼저 확인
+"%ADB%" get-state >nul 2>&1
 if errorlevel 1 (
+  echo 에뮬레이터가 꺼져 있어요. Android Studio Device Manager에서 Pleos Connect를 켠 뒤 다시 실행해 주세요.
+  pause
+  exit /b 1
+)
+echo [1/2] 빌드하고 에뮬레이터에 설치하는 중...
+if not exist build mkdir build
+call gradlew.bat installDebug > build\last-build.log 2>&1
+set "BUILD_RESULT=%errorlevel%"
+type build\last-build.log
+if not "%BUILD_RESULT%"=="0" (
+  echo.
+  echo 전체 기록: build\last-build.log
   echo.
   echo 빌드 실패: 위의 에러 메시지를 팀 대화방에 공유해 주세요.
   pause

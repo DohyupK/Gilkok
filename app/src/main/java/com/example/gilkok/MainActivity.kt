@@ -115,7 +115,8 @@ class MainActivity : AppCompatActivity() {
         fun enlarge(view:View){if(view is TextView){view.textSize=maxOf(view.textSize/resources.displayMetrics.scaledDensity,20f);if(view is Button || view is EditText)view.minimumHeight=dp(64)};if(view is android.view.ViewGroup)for(i in 0 until view.childCount)enlarge(view.getChildAt(i))}
         value.window?.decorView?.let(::enlarge)
     }
-    private fun showPanel(index:Int){
+    // 주행·분석 화면은 2차 PT 전까지 재설계 예정이라 숨김 (코드는 유지). 항상 경로 화면만 사용.
+    private fun showPanel(@Suppress("UNUSED_PARAMETER") requested:Int){ val index=0
         panel=if(index==2 && drivingRestricted())1 else index
         listOf(R.id.route_panel,R.id.trip_panel,R.id.report_panel).forEachIndexed{i,id->findViewById<View>(id).visibility=if(i==panel)View.VISIBLE else View.GONE}
         listOf(R.id.nav_route,R.id.nav_trip,R.id.nav_report).forEachIndexed{i,id->
@@ -169,9 +170,13 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton("목적지로 선택"){_,_->choosePlace(Place("지도에서 선택한 위치",point))}.create());return
         }
         if(koks.size>=KokPoints.MAX){toast("콕 지점은 최대 ${KokPoints.MAX}곳까지예요 (차량 내비 경유지 한도). 기존 지점을 지우고 찍어주세요");return}
-        val fallback="콕 지점 ${koks.size+1}"
-        addKok(KokPoint(fallback,point))
-        namer.name(point,fallback){name->if(name!=fallback){koks=koks.map{if(it.point==point)it.copy(name=name) else it};persistSelection();chipKey="";comparisonKey="";render()}}
+        val fallback=UNNAMED
+        val pending=KokPoint(fallback,point)
+        namingKeys+=pending.key
+        addKok(pending)
+        namer.name(point,fallback){name->
+            namingKeys-=pending.key
+            koks=koks.map{if(it.point==point && name!=fallback)it.copy(name=name) else it};persistSelection();chipKey="";comparisonKey="";render()}
     }
     private fun updateMapLifecycle(){map?.setVisible(resumed && panel==0 && ExternalServices.allowed(this))}
     private fun updateLocationLifecycle(){if(resumed && panel==0 && ExternalServices.allowed(this))deviceLocation.start() else deviceLocation.stop()}
@@ -217,7 +222,7 @@ class MainActivity : AppCompatActivity() {
         if(drivingRestricted())return
         koks=koks-value;clearRoutes();persistSelection();if(selectedPlace!=null)compare() else render()
     }
-    private fun clearRoutes(){poiToken++;poiProvider?.close();poiOpen=false;pois=emptyList();poiHighlight=null;map?.showPois(emptyList(),null);requestToken++;routeProvider?.close();routes=emptyList();energies=emptyList();comparing=false;compareError="";comparisonKey="";map?.showRoutes(emptyList(),0)}
+    private fun clearRoutes(){poiToken++;poiProvider?.close();poiOpen=false;pois=emptyList();poiHighlight=null;showPoisEverywhere(emptyList(),null);requestToken++;routeProvider?.close();routes=emptyList();energies=emptyList();comparing=false;compareError="";comparisonKey="";map?.showRoutes(emptyList(),0)}
     private fun persistSelection(){prefs.edit().putString("koks",KokPoints.encode(koks)).putString("name",selectedPlace?.name).putString("lat",selectedPlace?.point?.latitude?.toString()).putString("lon",selectedPlace?.point?.longitude?.toString()).putString("address",selectedPlace?.address).apply()}
 
     // ───────────────────────── 경로 비교 ─────────────────────────
@@ -263,8 +268,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var chipKey=""
+    // 이름을 받아오는 중인 콕 지점 (도로 이름 표시 상태용)
+    private val namingKeys=mutableSetOf<String>()
+    /** 콕 지점이 길콕 경로에 실제로 반영됐는지: null = 아직 계산 전/중 */
+    private fun kokPassed(kok:KokPoint):Boolean?{
+        val gil=routes.getOrNull(1) ?: return null
+        if(comparing) return null
+        return Geo.distanceToPath(kok.point,gil.path)<=KokValidator.TOLERANCE_M
+    }
     private fun renderKoks(restricted:Boolean){
-        val key="${koks.joinToString{it.key+it.name+it.place}}|$restricted"
+        val key="${koks.joinToString{it.key+it.name+it.place}}|$restricted|${namingKeys.size}|$comparing|${routes.hashCode()}"
         if(key==chipKey)return
         chipKey=key
         val box=findViewById<LinearLayout>(R.id.kok_list);box.removeAllViews()
@@ -275,14 +288,26 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(android.graphics.Color.parseColor(if(kok.place)"#FFFFFF" else "#101A28"))
                 background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(android.graphics.Color.parseColor(if(kok.place)PLACE else KOK))}
             },LinearLayout.LayoutParams(dp(34),dp(34)).apply{marginEnd=dp(12)})
-            row.addView(TextView(this).apply{text=kok.name;textSize=19f;setTextColor(getColor(R.color.white));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(0,-2,1f))
+            // 도로 이름을 주인공으로, 아래 줄에 종류 · 반영 상태
+            val naming=kok.key in namingKeys
+            val title=when{naming->"도로 확인 중…";kok.name==UNNAMED->"선택한 지점";else->kok.name}
+            val passed=kokPassed(kok)
+            val status=when{comparing->"경로 계산 중";routes.size<2->"경로 계산 대기";passed==true->"경로에 반영됨";else->"이 길을 지나지 못했어요"}
+            val texts=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+            texts.addView(TextView(this).apply{text=title;textSize=20f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(if(naming)R.color.road_muted else R.color.white));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END})
+            texts.addView(TextView(this).apply{text="${if(kok.place)"명소 경유지" else "선택한 도로"} · $status";textSize=15f;setTextColor(getColor(if(passed==false)R.color.road_bad else R.color.road_muted))})
+            row.addView(texts,LinearLayout.LayoutParams(0,-2,1f))
+            if(passed!=null) row.addView(TextView(this).apply{
+                text=if(passed)"✓" else "!";textSize=20f;setTypeface(typeface,Typeface.BOLD);gravity=Gravity.CENTER
+                setTextColor(getColor(if(passed)R.color.road_good else R.color.road_bad))},LinearLayout.LayoutParams(dp(36),dp(36)))
             row.addView(MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
                 text="✕";isEnabled=!restricted;contentDescription="${kok.name} 지우기"
                 backgroundTintList=ColorStateList.valueOf(android.graphics.Color.TRANSPARENT);setTextColor(getColor(R.color.road_muted))
                 setOnClickListener{removeKok(kok)}},LinearLayout.LayoutParams(dp(64),dp(64)))
             box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(8)})
         }
-        text(R.id.kok_hint,when{koks.isEmpty()->"지도에서 지나고 싶은 길을 탭하세요. 그 길을 지나는 경로를 만들어 비교해요.";koks.size<KokPoints.MAX->"한 곳 더 찍을 수 있어요 (최대 ${KokPoints.MAX}곳)";else->"차량 내비 경유지 한도인 ${KokPoints.MAX}곳을 모두 찍었어요"})
+        val failed=koks.any{kokPassed(it)==false}
+        text(R.id.kok_hint,when{failed->"표시한 길을 지나는 경로를 찾지 못했어요. 그 길의 다른 지점을 찍어 보세요.";!comparing && routes.size==2->"선택한 도로를 통과하는 경로를 계산했어요.";koks.isEmpty()->"지도에서 지나고 싶은 길을 탭하세요. 그 길을 지나는 경로를 만들어 비교해요.";koks.size<KokPoints.MAX->"한 곳 더 찍을 수 있어요 (최대 ${KokPoints.MAX}곳)";else->"차량 내비 경유지 한도인 ${KokPoints.MAX}곳을 모두 찍었어요"})
     }
 
     private fun renderComparison(restricted:Boolean){
@@ -295,67 +320,82 @@ class MainActivity : AppCompatActivity() {
             comparing->note("경로를 계산하고 있습니다…")
             compareError.isNotBlank()->note(compareError,R.color.road_bad)
             routes.size==1->{
-                box.addView(routeCard(0,routes[0],energies.getOrNull(0),restricted),LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(12)})
-                note("지도에서 지나고 싶은 길을 탭하면 그 길을 지나는 길콕 경로가 함께 그려져 비교돼요")
-                note(listOf(routes[0].source.label,routes[0].note).filter{it.isNotBlank()}.joinToString(" · "))
+                box.addView(compareHeader(routes[0]))
+                val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
+                row.addView(routeCard(0,routes[0],energies.getOrNull(0),restricted),LinearLayout.LayoutParams(0,-2,1f))
+                box.addView(row)
+                note("지도에서 지나고 싶은 길을 탭하면 내가 고른 길이 옆에 나란히 비교돼요")
+                box.addView(poiButton(restricted))
                 if(poiOpen) box.addView(poiSection(restricted))
             }
             routes.size==2->{
-                routes.forEachIndexed{i,r->box.addView(routeCard(i,r,energies.getOrNull(i),restricted),LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(12)})}
-                val base=routes[0];val gil=routes[1]
-                val dt=minutes(gil.durationS)-minutes(base.durationS)
-                val de=(energies.getOrNull(1)?.kwh ?: 0.0)-(energies.getOrNull(0)?.kwh ?: 0.0)
-                val same=KokValidator.passed(gil.koks,base.path)==gil.koks.size
-                note(if(same)"추천 경로도 콕 찍은 길을 지나요. 다른 길을 찍어 비교해 보세요."
-                    else "길콕 경로는 추천 대비 ${if(dt>=0)"+$dt" else "$dt"}분 · ${if(de>=0)"+" else "−"}${fmt(abs(de),2)} kWh",
-                    if(dt<=0 && de<=0)R.color.road_good else R.color.white)
-                note(listOf(gil.source.label,gil.note).filter{it.isNotBlank()}.joinToString(" · ")+"\n내비가 다시 탐색한 실제 안내 경로는 미리보기와 조금 다를 수 있어요")
+                box.addView(compareHeader(routes[1]))
+                val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
+                routes.forEachIndexed{i,r->row.addView(routeCard(i,r,energies.getOrNull(i),restricted),LinearLayout.LayoutParams(0,-2,1f).apply{if(i==0)marginEnd=dp(10)})}
+                box.addView(row)
+                box.addView(conclusion())
+                box.addView(poiButton(restricted))
                 if(poiOpen) box.addView(poiSection(restricted))
             }
             selectedPlace==null->note("목적지를 고르면 추천 경로가 바로 나와요")
         }
     }
 
+    /** "경로 비교" 제목 + 데이터 근거 */
+    private fun compareHeader(r:RouteOption):View=LinearLayout(this).apply{
+        orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(4),0,dp(10))
+        addView(TextView(this@MainActivity).apply{text="경로 비교";textSize=20f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white))},LinearLayout.LayoutParams(0,-2,1f))
+        val basis=listOf("예측값",if(r.source.hasTraffic)"교통 반영" else "교통정보 미반영",if(r.source==RouteSource.DEMO)"데모" else "").filter{it.isNotBlank()}.joinToString(" · ")
+        addView(TextView(this@MainActivity).apply{text=basis;textSize=14f;setTextColor(getColor(R.color.road_muted))})
+    }
+    /** 한 경로 = 작은 카드 한 칸. 누르면 그 경로를 고르고 지도에서 잠깐 굵게 강조 */
     private fun routeCard(i:Int,r:RouteOption,e:EnergyPrediction?,restricted:Boolean):View{
         val selected=i==chosen
         val lineColor=android.graphics.Color.parseColor(if(i==0)ROUTE_BASE else ROUTE_GIL)
-        val shell=LinearLayout(this).apply{
-            orientation=LinearLayout.HORIZONTAL
+        val card=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(14),dp(16),dp(14))
             background=getDrawable(if(selected)R.drawable.card_selected else R.drawable.card_bg)
-            setOnClickListener{if(!restricted && chosen!=i){chosen=i;if(poiOpen)closePois();map?.showRoutes(routes,chosen);comparisonKey="";render()}}
-        }
-        shell.addView(View(this).apply{background=android.graphics.drawable.GradientDrawable().apply{setColor(lineColor)}},LinearLayout.LayoutParams(dp(6),-1))
-        val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(16),dp(16),dp(16))}
-        val head=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        head.addView(TextView(this).apply{text=r.title;textSize=19f;setTypeface(typeface,Typeface.BOLD);setTextColor(if(selected)lineColor else getColor(R.color.white))},LinearLayout.LayoutParams(0,-2,1f))
-        val tag=when{r.koks.isEmpty()->"내비 추천";r.passesAll->"통과 ✓";else->"${r.passed}/${r.koks.size}곳만"}
-        head.addView(TextView(this).apply{text=tag;textSize=15f;background=getDrawable(R.drawable.tag_bg);setTextColor(getColor(if(!r.passesAll)R.color.road_bad else R.color.road_good))})
-        card.addView(head)
-        card.addView(TextView(this).apply{text="${minutes(r.durationS)}분   ${fmt(r.distanceM/1000)} km";textSize=30f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white));setPadding(0,dp(6),0,dp(2))})
-        if(routes.size==2 && i==1){
-            val base=routes[0]
-            val dt=minutes(r.durationS)-minutes(base.durationS)
-            val de=(e?.kwh ?: 0.0)-(energies.getOrNull(0)?.kwh ?: 0.0)
-            val delta=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(0,dp(2),0,dp(4))}
-            fun chip(label:String,good:Boolean)=TextView(this).apply{
-                text=label;textSize=15f;setTextColor(getColor(if(good)R.color.road_good else R.color.road_gold))
-                background=getDrawable(R.drawable.tag_bg);setPadding(dp(10),dp(4),dp(10),dp(4))
+            setOnClickListener{
+                if(restricted)return@setOnClickListener
+                if(chosen!=i){chosen=i;if(poiOpen)closePois();map?.showRoutes(routes,chosen);comparisonKey="";render()}
+                map?.pulseRoute(i)
             }
-            delta.addView(chip(if(dt>=0)"+$dt분" else "${dt}분",dt<=0),LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(8)})
-            delta.addView(chip("${if(de>=0)"+" else "−"}${fmt(abs(de),2)} kWh",de<=0))
-            card.addView(delta)
         }
-        val congestion=(r.congestedRatio*100).roundToInt()
-        card.addView(TextView(this).apply{text=if(r.source.hasTraffic)"정체·지체 구간 $congestion%" else "교통정보 없음 · 도로 기준 시간";textSize=17f;setTextColor(getColor(if(congestion>=40)R.color.road_gold else R.color.road_muted))})
-        if(e!=null) card.addView(TextView(this).apply{
-            text="예상 전력 ${fmt(e.kwh,2)} kWh  ·  ${e.basis.label}"+if(e.habitPercent>0)" · 습관 +${e.habitPercent}%" else ""
-            textSize=17f;setTextColor(getColor(R.color.road_teal_bright));setPadding(0,dp(4),0,0)})
-        if(selected) card.addView(MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
-            text=if(poiOpen)"주변 명소 닫기" else "주변 명소 보기";textSize=17f;isEnabled=!restricted
-            backgroundTintList=ColorStateList.valueOf(getColor(R.color.road_surface2));setTextColor(getColor(R.color.white))
-            setOnClickListener{if(poiOpen)closePois() else {poiOpen=true;loadPois(r,poiTheme)}}},LinearLayout.LayoutParams(-1,dp(64)).apply{topMargin=dp(12)})
-        shell.addView(card,LinearLayout.LayoutParams(0,-2,1f))
-        return shell
+        val head=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        head.addView(View(this).apply{background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(lineColor)}},LinearLayout.LayoutParams(dp(12),dp(12)).apply{marginEnd=dp(8)})
+        head.addView(TextView(this).apply{text=if(i==0)"추천 경로" else "내가 고른 길";textSize=17f;setTextColor(getColor(R.color.white));maxLines=1},LinearLayout.LayoutParams(0,-2,1f))
+        if(i==1) head.addView(TextView(this).apply{text=if(r.passesAll)"✓" else "!";textSize=17f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(if(r.passesAll)R.color.road_good else R.color.road_bad))})
+        card.addView(head)
+        card.addView(TextView(this).apply{text="${minutes(r.durationS)}분";textSize=32f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white));setPadding(0,dp(6),0,0)})
+        card.addView(TextView(this).apply{text="${fmt(r.distanceM/1000)} km";textSize=18f;setTextColor(getColor(R.color.white))})
+        if(e!=null) card.addView(TextView(this).apply{text="${fmt(e.kwh,2)} kWh";textSize=16f;setTextColor(getColor(R.color.road_muted));setPadding(0,dp(4),0,0)})
+        return card
+    }
+    /** 결론 한 문장: 고른 길이 추천 대비 얼마나 다른지 */
+    private fun conclusion():View{
+        val base=routes[0];val gil=routes[1]
+        val dt=minutes(gil.durationS)-minutes(base.durationS)
+        val de=(energies.getOrNull(1)?.kwh ?: 0.0)-(energies.getOrNull(0)?.kwh ?: 0.0)
+        val same=KokValidator.passed(gil.koks,base.path)==gil.koks.size
+        fun time()=when{dt>0->"${dt}분 더 걸리고";dt<0->"${-dt}분 빠르고";else->"시간은 같고"}
+        fun energy()=when{de>.005->"예상 전력은 ${fmt(de,2)} kWh 더 필요해요.";de< -.005->"예상 전력은 ${fmt(-de,2)} kWh 덜 써요.";else->"예상 전력은 비슷해요."}
+        val better=dt<=0 && de<=.005
+        val main=if(same)"추천 경로도 이 길을 지나요." else "${time()}, ${energy()}"
+        val sub=when{same->"다른 길을 찍어 비교해 보세요.";!gil.passesAll->"고른 길을 다 지나지 못했어요. 지도에서 다른 지점을 찍어 보세요.";better->"고른 길이 더 유리해요.";else->"그래도 원하는 길을 선택해 이동할 수 있어요."}
+        return LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(16),dp(4),dp(8))
+            addView(TextView(this@MainActivity).apply{text="내가 고른 길은";textSize=18f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white))})
+            addView(TextView(this@MainActivity).apply{text=main;textSize=19f;setTextColor(getColor(if(better && !same)R.color.road_good else R.color.white));setPadding(0,dp(4),0,dp(2))})
+            addView(TextView(this@MainActivity).apply{text=sub;textSize=15f;setTextColor(getColor(if(!gil.passesAll)R.color.road_bad else R.color.road_muted))})
+            if(gil.note.isNotBlank()) addView(TextView(this@MainActivity).apply{text=gil.note;textSize=14f;setTextColor(getColor(R.color.road_muted));setPadding(0,dp(4),0,0)})
+        }
+    }
+    private fun poiButton(restricted:Boolean):View=MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
+        val r=routes.getOrNull(chosen)
+        text=if(poiOpen)"주변 명소 닫기" else "${if(chosen==1)"내가 고른 길" else "추천 경로"} 주변 명소 보기";textSize=17f;isEnabled=!restricted && r!=null
+        backgroundTintList=ColorStateList.valueOf(getColor(R.color.road_surface2));setTextColor(getColor(R.color.white))
+        setOnClickListener{if(poiOpen)closePois() else if(r!=null){poiOpen=true;loadPois(r,poiTheme)}}
+        layoutParams=LinearLayout.LayoutParams(-1,dp(64)).apply{topMargin=dp(8)}
     }
 
     // ───────────────────────── 주변 명소 ─────────────────────────
@@ -367,6 +407,7 @@ class MainActivity : AppCompatActivity() {
     private var poiStatus=""
     private var poiHighlight:Int?=null
     private var poiToken=0
+    private var poiDemo=false
     /** 명소 목록은 경로 카드 아래에 붙으므로, 열거나 결과가 오면 그 위치까지 자동으로 스크롤합니다. */
     private fun scrollToPois(){
         val scroll=findViewById<ScrollView>(R.id.route_scroll)
@@ -376,30 +417,33 @@ class MainActivity : AppCompatActivity() {
             scroll.smoothScrollTo(0,(y-dp(8)).coerceAtLeast(0)) } }
     }
     private fun findViewWithTagIn(root:View,tag:String):View?=root.findViewWithTag(tag)
-    private fun closePois(){poiToken++;poiProvider?.close();poiOpen=false;pois=emptyList();poiHighlight=null;poiStatus="";map?.showPois(emptyList(),null);comparisonKey="";render()}
+    private fun closePois(){poiToken++;poiProvider?.close();poiOpen=false;pois=emptyList();poiHighlight=null;poiStatus="";showPoisEverywhere(emptyList(),null);comparisonKey="";render()}
     private fun loadPois(route:RouteOption,theme:PoiTheme){
         val my=++poiToken
         poiTheme=theme;pois=emptyList();poiHighlight=null;poiStatus="경로 주변 ${theme.label}를 찾고 있어요…"
-        map?.showPois(emptyList(),null);comparisonKey="";render();scrollToPois()
+        showPoisEverywhere(emptyList(),null);comparisonKey="";render();scrollToPois()
         poiProvider?.close()
         fun done(items:List<Poi>,note:String){
             if(my!=poiToken)return
             pois=items
-            poiStatus=if(items.isEmpty())"경로 가까이에 들를 만한 ${theme.label}가 없어요 (+${PoiRanker.MAX_DETOUR_MIN}분 이내)" else "추가 시간이 짧은 순 · 지도의 보라색 번호와 같아요. 누르면 지도 가운데로 이동해요$note"
-            map?.showPois(items,null);comparisonKey="";render();scrollToPois()
+            poiStatus=if(items.isEmpty())"경로 가까이에 들를 만한 ${theme.label}가 없어요 (+${PoiRanker.MAX_DETOUR_MIN}분 이내)" else "추가 시간이 짧은 순 · 지도 번호와 같아요$note"
+            showPoisEverywhere(items,null);comparisonKey="";render();scrollToPois()
             if(items.isNotEmpty()) toast("주변 ${theme.label} ${items.size}곳을 지도에 보라색 번호로 표시했어요")
         }
         val provider=PoiSettings.provider(this).also{poiProvider=it}
         provider.search(route,theme){r->
-            r.onSuccess{done(it,if(provider.demo)" · 데모 데이터" else " · 한국관광공사")}
-             .onFailure{err->DemoPoiProvider().search(route,theme){d->done(d.getOrDefault(emptyList())," · 데모 데이터 (${err.message})")}}
+            r.onSuccess{poiDemo=provider.demo;done(it,if(provider.demo)"" else " · 한국관광공사")}
+             .onFailure{err->DemoPoiProvider().search(route,theme){d->poiDemo=true;android.util.Log.w("GilkokPoi","demo fallback: ${err.message}");done(d.getOrDefault(emptyList()),"")}}
         }
     }
     private fun poiSection(restricted:Boolean):View{
         val route=routes.getOrNull(chosen) ?: return View(this)
         val efficiency=energies.getOrNull(chosen)?.kmPerKwh ?: RouteEnergyEstimator.DEFAULT_KM_PER_KWH
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=getDrawable(R.drawable.card_selected);setPadding(dp(16),dp(16),dp(16),dp(12));tag="poi_section"}
-        box.addView(TextView(this).apply{text="${route.title} 주변 명소";textSize=19f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white))})
+        val head=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        head.addView(TextView(this).apply{text="${if(chosen==1)"내가 고른 길" else "추천 경로"} 주변 추천 명소";textSize=19f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white))},LinearLayout.LayoutParams(0,-2,1f))
+        if(poiDemo) head.addView(TextView(this).apply{text="예시";textSize=14f;background=getDrawable(R.drawable.tag_bg);setTextColor(getColor(R.color.white))})
+        box.addView(head)
         val tabs=GridLayout(this).apply{columnCount=2}
         PoiTheme.entries.forEach{theme->
             tabs.addView(MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
@@ -415,31 +459,58 @@ class MainActivity : AppCompatActivity() {
             val row=LinearLayout(this).apply{
                 orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(4),dp(8))
                 if(on) background=getDrawable(R.drawable.card_selected)
-                setOnClickListener{poiHighlight=if(on)null else i;map?.showPois(pois,poiHighlight);comparisonKey="";render()}
+                // 이름을 누르면 펼침/접힘 (펼친 명소가 지도에서도 강조됨)
+                setOnClickListener{poiHighlight=if(on)null else i;showPoisEverywhere(pois,poiHighlight);comparisonKey="";render()}
             }
             row.addView(TextView(this).apply{
                 text="${i+1}";textSize=16f;setTypeface(typeface,Typeface.BOLD);gravity=Gravity.CENTER;setTextColor(android.graphics.Color.WHITE)
                 background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(android.graphics.Color.parseColor(PLACE))}
             },LinearLayout.LayoutParams(dp(34),dp(34)).apply{marginEnd=dp(12)})
             val texts=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
-            texts.addView(TextView(this).apply{text=poi.name;textSize=19f;setTextColor(getColor(R.color.white));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END})
-            val where=when{poi.routeFraction>=.75->"도착 근처";poi.routeFraction>=.4->"경로 중간";else->"출발 쪽"}
-            texts.addView(TextView(this).apply{text="${poiTheme.label} · $where";textSize=15f;setTextColor(getColor(R.color.road_muted));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END})
-            texts.addView(TextView(this).apply{text="경로에서 ${if(poi.offRouteM>=1000)"${fmt(poi.offRouteM/1000)}km" else "${(poi.offRouteM/10).roundToInt()*10}m"} · 들르면 +${poi.detourMinutes}분 · +${fmt(poi.detourKm/efficiency,2)} kWh";textSize=16f;setTextColor(getColor(R.color.road_teal_bright))})
-            if(poi.description.isNotBlank()) texts.addView(TextView(this).apply{text=poi.description;textSize=15f;setTextColor(getColor(R.color.white));alpha=.85f;maxLines=3;ellipsize=android.text.TextUtils.TruncateAt.END;setPadding(0,dp(4),0,0)})
+            texts.addView(TextView(this).apply{text="${poi.name}  ${if(on)"▲" else "▼"}";textSize=20f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END})
+            val dist=if(poi.offRouteM>=1000)"${fmt(poi.offRouteM/1000)}km" else "${(poi.offRouteM/10).roundToInt()*10}m"
+            texts.addView(TextView(this).apply{text="${poi.category.ifBlank{poiTheme.label}} · 경로에서 약 $dist · 추가 ${poi.detourMinutes}분";textSize=16f;setTextColor(getColor(R.color.road_muted));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END})
             row.addView(texts,LinearLayout.LayoutParams(0,-2,1f))
-            row.addView(MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
-                text="들르기";textSize=16f;isEnabled=!restricted
+            box.addView(row)
+            if(on){
+                // 펼친 내용: 대표 이미지 + 1~3줄 소개
+                val detail=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(8),0,dp(8),dp(8))}
+                if(poi.imageUrl.isNotBlank()){
+                    val image=android.widget.ImageView(this).apply{
+                        scaleType=android.widget.ImageView.ScaleType.CENTER_CROP;setBackgroundColor(getColor(R.color.road_navy))
+                        clipToOutline=true;outlineProvider=object:android.view.ViewOutlineProvider(){override fun getOutline(v:View,o:android.graphics.Outline){o.setRoundRect(0,0,v.width,v.height,dp(12).toFloat())}}
+                        contentDescription="${poi.name} 대표 사진"}
+                    detail.addView(image,LinearLayout.LayoutParams(-1,dp(170)).apply{bottomMargin=dp(8)})
+                    PoiImages.load(this,poi.imageUrl){bmp-> if(bmp!=null) image.setImageBitmap(bmp) else image.visibility=View.GONE}
+                }
+                detail.addView(TextView(this).apply{
+                    text=poi.description.ifBlank{"소개 정보가 없어요."};textSize=16f;setTextColor(getColor(R.color.white));alpha=.9f
+                    maxLines=3;ellipsize=android.text.TextUtils.TruncateAt.END;setLineSpacing(dp(2).toFloat(),1f)})
+                if(poi.address.isNotBlank() && !poi.demo) detail.addView(TextView(this).apply{text=poi.address;textSize=14f;setTextColor(getColor(R.color.road_muted));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END;setPadding(0,dp(4),0,0)})
+                box.addView(detail)
+            }
+            // 버튼 두 개: 지도에서 보기 / 경로에 추가
+            val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(dp(4),0,dp(4),dp(10))}
+            actions.addView(MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
+                text=if(on)"지도 보는 중" else "지도에서 보기";textSize=16f;isEnabled=!restricted
+                backgroundTintList=ColorStateList.valueOf(getColor(if(on)R.color.road_teal else R.color.road_navy));setTextColor(getColor(R.color.white))
+                setOnClickListener{poiHighlight=i;showPoisEverywhere(pois,poiHighlight);comparisonKey="";render()}
+            },LinearLayout.LayoutParams(0,dp(56),1f).apply{marginEnd=dp(8)})
+            actions.addView(MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
+                text="경로에 추가";textSize=16f;isEnabled=!restricted
                 backgroundTintList=ColorStateList.valueOf(android.graphics.Color.parseColor(PLACE))
                 setOnClickListener{
-                    if(koks.size>=KokPoints.MAX){toast("경유지는 최대 ${KokPoints.MAX}곳이에요. 왼쪽 목록에서 하나 지우고 추가해주세요");return@setOnClickListener}
+                    if(koks.size>=KokPoints.MAX){toast("경유지는 최대 ${KokPoints.MAX}곳이에요. 위 목록에서 하나 지우고 추가해주세요");return@setOnClickListener}
                     closePois();addKok(KokPoint(poi.name,poi.point,place=true))
-                }},LinearLayout.LayoutParams(dp(96),dp(56)))
-            box.addView(row)
+                }},LinearLayout.LayoutParams(0,dp(56),1f))
+            box.addView(actions)
         }
         box.addView(TextView(this).apply{text="추가 시간은 경로에서 떨어진 거리로 계산한 추정치예요";textSize=14f;setTextColor(getColor(R.color.road_muted));setPadding(0,dp(6),0,0)})
         return box.also{it.layoutParams=LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(8)}}
     }
+
+    /** 지도에 명소 표시 (강조 포함) */
+    private fun showPoisEverywhere(items:List<Poi>,highlight:Int?){ map?.showPois(items,highlight) }
 
     // ───────────────────────── 안내 + 기록 ─────────────────────────
     private fun confirmGuidance(){
@@ -448,7 +519,8 @@ class MainActivity : AppCompatActivity() {
         val useKoks=if(routes.size==2 && chosen==1)routes[1].koks else emptyList()
         val prediction=energies.getOrNull(if(routes.size==2)chosen else -1)?.kwh
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(24),dp(8),dp(24),0)}
-        val record=CheckBox(this).apply{text="주행 기록도 함께 시작 (도착 후 예측과 실제 비교)";isChecked=session?.recording!=true;isEnabled=session?.recording!=true};box.addView(record)
+        // 주행 기록은 주행·분석 화면과 함께 숨김 (재설계 후 다시 켬)
+        val record=CheckBox(this).apply{text="주행 기록도 함께 시작";isChecked=false;visibility=View.GONE};box.addView(record)
         val message=if(useKoks.isNotEmpty())"${useKoks.joinToString(", "){it.name}}을(를) 경유지로 차량 기본 내비에 전달합니다.\n내비가 경로를 다시 탐색하므로 미리보기와 실제 안내 경로가 조금 다를 수 있어요."
             else "${target.name}을(를) 차량 기본 내비에 목적지로 전달합니다."
         show(AlertDialog.Builder(this).setTitle("${target.name}(으)로 안내").setMessage(message).setView(box)
@@ -717,5 +789,5 @@ class MainActivity : AppCompatActivity() {
         show(AlertDialog.Builder(this).setTitle("주행 기록").setItems(history.map { "${date(it.startMs)} · ${it.destination ?: "목적지 없음"}" }.toTypedArray()) { _,i -> reportId=history[i].id; reportKey=""; renderReport() }.setNegativeButton("닫기",null).create())
     }
     private fun date(time:Long)=DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT,Locale.KOREA).format(Date(time))
-    companion object { private const val SPEED=101; private const val RECORD=102; private const val MAP_LOCATION=103 }
+    companion object { private const val UNNAMED="선택한 지점"; private const val SPEED=101; private const val RECORD=102; private const val MAP_LOCATION=103 }
 }
