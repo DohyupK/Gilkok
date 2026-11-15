@@ -31,3 +31,7 @@ gilkok-check.png
 /docs/handoff-evidence/
 /docs/AI_HANDOFF_SNAPSHOT.json
 /docs/README_old.md
+
+# 공모전 제출용 APK는 apk/ 폴더에서만 허용
+!apk/
+!apk/*.apk

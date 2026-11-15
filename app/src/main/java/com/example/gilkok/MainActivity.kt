@@ -250,6 +250,11 @@ class MainActivity : AppCompatActivity() {
                 val history=s?.store?.recent().orEmpty()
                 routes=list;energies=list.map{RouteEnergyEstimator.estimate(it,s?.snapshot?.evKmPerKwh,history)};chosen=count-1
                 map?.showRoutes(routes,chosen)
+                // 서울 구간은 실시간 교통으로 시간·연비 다시 계산
+                SeoulTraffic.adjust(this,list){adj->
+                    if(token!=requestToken||adj===list)return@adjust
+                    routes=adj;energies=adj.map{RouteEnergyEstimator.estimate(it,s?.snapshot?.evKmPerKwh,history)};comparisonKey="";render()
+                }
             } else if(compareError.isBlank()) compareError="경로를 계산하지 못했습니다"
             comparisonKey="";render()
         }
@@ -345,7 +350,7 @@ class MainActivity : AppCompatActivity() {
     private fun compareHeader(r:RouteOption):View=LinearLayout(this).apply{
         orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(4),0,dp(10))
         addView(TextView(this@MainActivity).apply{text="경로 비교";textSize=20f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white))},LinearLayout.LayoutParams(0,-2,1f))
-        val basis=listOf("예측값",if(r.source.hasTraffic)"교통 반영" else "교통정보 미반영",if(r.source==RouteSource.DEMO)"데모" else "").filter{it.isNotBlank()}.joinToString(" · ")
+        val basis=listOf("${Vehicles.current().name} 공인 연비 기준","예측값",if(r.source.hasTraffic)"교통 반영" else "교통정보 미반영",if(r.source==RouteSource.DEMO)"데모" else "").filter{it.isNotBlank()}.joinToString(" · ")
         addView(TextView(this@MainActivity).apply{text=basis;textSize=14f;setTextColor(getColor(R.color.road_muted))})
     }
     /** 한 경로 = 작은 카드 한 칸. 누르면 그 경로를 고르고 지도에서 잠깐 굵게 강조 */
@@ -368,17 +373,20 @@ class MainActivity : AppCompatActivity() {
         card.addView(head)
         card.addView(TextView(this).apply{text="${minutes(r.durationS)}분";textSize=32f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white));setPadding(0,dp(6),0,0)})
         card.addView(TextView(this).apply{text="${fmt(r.distanceM/1000)} km";textSize=18f;setTextColor(getColor(R.color.white))})
-        if(e!=null) card.addView(TextView(this).apply{text="${fmt(e.kwh,2)} kWh";textSize=16f;setTextColor(getColor(R.color.road_muted));setPadding(0,dp(4),0,0)})
+        // 연료: 공인 도심/고속 연비로 역산 + 도심/고속 비율
+        val fuel=FuelModel.estimate(r)
+        card.addView(TextView(this).apply{text="연료 ${fmt(fuel.liters,2)} L";textSize=16f;setTextColor(getColor(R.color.road_muted));setPadding(0,dp(4),0,0)})
+        card.addView(TextView(this).apply{text="도심 ${fuel.cityPercent}% · 고속 ${fuel.highwayPercent}%";textSize=14f;setTextColor(getColor(R.color.road_muted))})
         return card
     }
     /** 결론 한 문장: 고른 길이 추천 대비 얼마나 다른지 */
     private fun conclusion():View{
         val base=routes[0];val gil=routes[1]
         val dt=minutes(gil.durationS)-minutes(base.durationS)
-        val de=(energies.getOrNull(1)?.kwh ?: 0.0)-(energies.getOrNull(0)?.kwh ?: 0.0)
+        val de=FuelModel.estimate(gil).liters-FuelModel.estimate(base).liters   // 연료 차이(L)
         val same=KokValidator.passed(gil.koks,base.path)==gil.koks.size
         fun time()=when{dt>0->"${dt}분 더 걸리고";dt<0->"${-dt}분 빠르고";else->"시간은 같고"}
-        fun energy()=when{de>.005->"예상 전력은 ${fmt(de,2)} kWh 더 필요해요.";de< -.005->"예상 전력은 ${fmt(-de,2)} kWh 덜 써요.";else->"예상 전력은 비슷해요."}
+        fun energy()=when{de>.005->"연료는 ${fmt(de,2)} L 더 필요해요.";de< -.005->"연료는 ${fmt(-de,2)} L 덜 써요.";else->"연료는 비슷해요."}
         val better=dt<=0 && de<=.005
         val main=if(same)"추천 경로도 이 길을 지나요." else "${time()}, ${energy()}"
         val sub=when{same->"다른 길을 찍어 비교해 보세요.";!gil.passesAll->"고른 길을 다 지나지 못했어요. 지도에서 다른 지점을 찍어 보세요.";better->"고른 길이 더 유리해요.";else->"그래도 원하는 길을 선택해 이동할 수 있어요."}

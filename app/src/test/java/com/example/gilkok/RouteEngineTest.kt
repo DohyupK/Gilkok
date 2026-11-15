@@ -43,4 +43,13 @@ class RouteEngineTest {
         assertTrue(jam.kwh > free.kwh)
         assertEquals(EnergyBasis.VEHICLE, RouteEnergyEstimator.estimate(route(emptyList()), 6.2f, emptyList()).basis)
     }
+
+    @Test fun fuelUsesCityAndHighwayRates() {
+        val r = RouteOption("t", emptyList(), 10_000.0, 900.0, emptyList(), 0.0, RouteSource.DEMO, 0, highwayM = 4_000.0)
+        val f = FuelModel.estimate(r, Vehicles.GRANDEUR_HEV)
+        assertEquals(6.0 / 16.85 + 4.0 / 17.4, f.liters, 1e-9)   // 도심 6km + 고속 4km
+        assertEquals(40, f.highwayPercent)
+        // 실제 연비가 공인 복합보다 나쁘면 연료가 늘어남
+        assertTrue(FuelModel.estimate(r, Vehicles.GRANDEUR_HEV, actualKmPerL = 14.0).liters > f.liters)
+    }
 }

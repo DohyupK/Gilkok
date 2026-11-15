@@ -28,6 +28,8 @@ data class RouteOption(
     val source: RouteSource,
     val passed: Int,                // 경로가 실제로 지나는 콕 지점 수
     val note: String = "",
+    val highwayM: Double = 0.0,     // 고속 구간(고속도로·자동차전용도로) 거리
+    val traffic: Boolean = false,   // 서울시 실시간 교통으로 시간을 보정했는지
 ) {
     val passesAll get() = passed >= koks.size
 }
@@ -133,6 +135,7 @@ class DemoRouteProvider : RouteProvider {
                 title = if (koks.isEmpty()) "기본 추천 경로" else "길콕 경로",
                 koks = koks, distanceM = distance, durationS = distance / (kmh / 3.6), path = path,
                 congestedRatio = ratio, source = source, passed = KokValidator.passed(koks, path),
+                highwayM = distance * (if (koks.isEmpty()) .25 else .10),
             )))
         }, 400)
     }
@@ -158,7 +161,7 @@ class OsrmRouteProvider(context: Context) : RouteProvider {
             val kok = koks.getOrNull(i - 1)
             if (i == 0 || i == all.lastIndex || kok == null) "unlimited" else if (kok.place) "400" else "80"
         }
-        val url = "https://router.project-osrm.org/route/v1/driving/$coords?overview=full&geometries=geojson&continue_straight=true&bearings=$bearings&radiuses=$radiuses"
+        val url = "https://router.project-osrm.org/route/v1/driving/$coords?overview=full&geometries=geojson&annotations=distance,speed&continue_straight=true&bearings=$bearings&radiuses=$radiuses"
         val call = client.newCall(Request.Builder().url(url).build())
         synchronized(calls) { calls += call }
         call.enqueue(object : Callback {
@@ -180,6 +183,7 @@ class OsrmRouteProvider(context: Context) : RouteProvider {
                             koks = koks, distanceM = route.getDouble("distance"), durationS = route.getDouble("duration"),
                             path = path, congestedRatio = 0.0, source = source, passed = KokValidator.passed(koks, path),
                             note = "교통정보 미반영 시간",
+                            highwayM = highwayMeters(route),
                         )
                     }
                 }
@@ -187,6 +191,18 @@ class OsrmRouteProvider(context: Context) : RouteProvider {
                 main.post { callback(result) }
             }
         })
+    }
+    /** 구간별 속도가 70km/h 이상인 거리 합 = 고속도로·자동차전용도로 */
+    private fun highwayMeters(route: JSONObject): Double {
+        var sum = 0.0
+        val legs = route.optJSONArray("legs") ?: return 0.0
+        for (l in 0 until legs.length()) {
+            val ann = legs.getJSONObject(l).optJSONObject("annotation") ?: continue
+            val d = ann.optJSONArray("distance") ?: continue
+            val v = ann.optJSONArray("speed") ?: continue
+            for (i in 0 until minOf(d.length(), v.length())) if (v.optDouble(i, 0.0) >= FuelModel.HIGHWAY_SPEED_MPS) sum += d.optDouble(i, 0.0)
+        }
+        return sum
     }
     override fun close() { synchronized(calls) { calls.forEach { it.cancel() }; calls.clear() } }
 }

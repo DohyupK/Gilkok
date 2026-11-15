@@ -24,6 +24,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TOUR_API_KEY", "\"${localProps.getProperty("TOUR_API_KEY", "")}\"")
+        buildConfigField("String", "SEOUL_TRAFFIC_KEY", "\"${localProps.getProperty("SEOUL_TRAFFIC_KEY", "")}\"")
     }
 
     // 제출용 서명: local.properties 에 RELEASE_STORE_FILE 등이 있을 때만 사용 (키 파일·비밀번호는 저장소에 올리지 않음)
