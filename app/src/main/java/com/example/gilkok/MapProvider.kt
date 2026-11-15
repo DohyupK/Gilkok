@@ -159,7 +159,7 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
             val bounds=LatLngBounds.Builder().apply { points.forEach { include(LatLng(it.latitude,it.longitude)) } }.build()
             val pad=(minOf(mapView.width,mapView.height)*0.12).toInt().coerceIn(40,140)
             userMoved=true
-            map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,pad,pad+dp(60),pad,pad),500)
+            map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,pad+dp(90),pad+dp(60),pad,pad),500)
         }
     }
     private fun dp(v:Int)=(v*context.resources.displayMetrics.density).toInt()
@@ -252,7 +252,7 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
         else if(pois.isNotEmpty() && ready && !restricted) runCatching {
             val all=pois.map { it.point }+routes.getOrNull(selected)?.path.orEmpty()
             val bounds=LatLngBounds.Builder().apply { all.forEach { include(LatLng(it.latitude,it.longitude)) } }.build()
-            userMoved=true; map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,120),500)
+            userMoved=true; map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,120+dp(90),120,120,120),500)
         }
     }
     private val pulseHandler=android.os.Handler(android.os.Looper.getMainLooper())

@@ -350,7 +350,7 @@ class MainActivity : AppCompatActivity() {
     private fun compareHeader(r:RouteOption):View=LinearLayout(this).apply{
         orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(4),0,dp(10))
         addView(TextView(this@MainActivity).apply{text="경로 비교";textSize=20f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white))},LinearLayout.LayoutParams(0,-2,1f))
-        val basis=listOf("${Vehicles.current().name} 공인 연비 기준","예측값",if(r.source.hasTraffic)"교통 반영" else "교통정보 미반영",if(r.source==RouteSource.DEMO)"데모" else "").filter{it.isNotBlank()}.joinToString(" · ")
+        val basis=listOf("${Vehicles.current().name} 공인 연비 기준","예측값",if(r.traffic)"서울 실시간 교통 반영" else if(r.source.hasTraffic)"교통 반영" else "교통정보 미반영",if(r.source==RouteSource.DEMO)"데모" else "").filter{it.isNotBlank()}.joinToString(" · ")
         addView(TextView(this@MainActivity).apply{text=basis;textSize=14f;setTextColor(getColor(R.color.road_muted))})
     }
     /** 한 경로 = 작은 카드 한 칸. 누르면 그 경로를 고르고 지도에서 잠깐 굵게 강조 */
@@ -373,6 +373,11 @@ class MainActivity : AppCompatActivity() {
         card.addView(head)
         card.addView(TextView(this).apply{text="${minutes(r.durationS)}분";textSize=32f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white));setPadding(0,dp(6),0,0)})
         card.addView(TextView(this).apply{text="${fmt(r.distanceM/1000)} km";textSize=18f;setTextColor(getColor(R.color.white))})
+        if(r.traffic) card.addView(TextView(this).apply{
+            val jam=(r.congestedRatio*100).toInt()
+            text=if(jam>0)"정체 구간 ${jam}%" else "막힘 없음";textSize=15f
+            setTextColor(getColor(if(jam>=20)R.color.road_bad else R.color.road_good))
+        })
         // 연료: 공인 도심/고속 연비로 역산 + 도심/고속 비율
         val fuel=FuelModel.estimate(r)
         card.addView(TextView(this).apply{text="연료 ${fmt(fuel.liters,2)} L";textSize=16f;setTextColor(getColor(R.color.road_muted));setPadding(0,dp(4),0,0)})

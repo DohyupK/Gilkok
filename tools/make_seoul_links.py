@@ -1,4 +1,4 @@
-# 표준노드링크(MOCT_LINK.shp/dbf) → app/src/main/assets/seoul_links.txt.gz
+# 표준노드링크(MOCT_LINK.shp/dbf) → app/src/main/assets/seoul_links.bin
 # 사용: zip에서 MOCT_LINK.* 를 풀고 같은 폴더에서 python3 make_seoul_links.py
 import struct, math, gzip, collections
 a=6378137.0; f=1/298.257222101; e2=f*(2-f); ep2=e2/(1-e2); k0=1.0; lat0=math.radians(38); lon0=math.radians(127); FE=200000; FN=600000
@@ -13,7 +13,7 @@ def inv(x,y):
     return math.degrees(lat),math.degrees(lon)
 dbf=open('MOCT_LINK.dbf','rb'); h=dbf.read(32); n,hl,rl=struct.unpack('<IHH',h[4:12])
 shp=open('MOCT_LINK.shp','rb'); shx=open('MOCT_LINK.shx','rb'); shx.seek(100)
-out=gzip.open('seoul_links.txt.gz','wt'); cnt=collections.Counter(); kept=0
+out=gzip.open('seoul_links.bin','wt'); cnt=collections.Counter(); kept=0
 for i in range(n):
     off,_=struct.unpack('>ii',shx.read(8))
     dbf.seek(hl+i*rl); r=dbf.read(rl); lid=r[1:11].decode().strip(); rank=r[41:44].decode().strip()

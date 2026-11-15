@@ -144,8 +144,11 @@ app/src/main/java/com/example/gilkok/
 - 키·비밀번호를 코드에 넣지 말 것 (`local.properties` → `BuildConfig`)
 - 고친 뒤에는 사람에게 `새로고침.bat` 실행을 안내
 
-## 실시간 교통 (서울 TOPIS) — 작업 중, 현재 꺼져 있음
-- 코드: `SeoulTraffic.kt` (`ENABLED = false`). 경로 구간 → 도로 링크 매칭 → 서울시 `TrafficInfo` 속도 조회 → 시간·정체 비율·고속 거리 재계산.
+## 실시간 교통 (서울 TOPIS) — 켜짐 (링크 5,265개)
+- 코드: `SeoulTraffic.kt` (`ENABLED = true`). 경로 구간 → 도로 링크 매칭 → 서울시 `TrafficInfo` 속도 조회 → 시간·정체 비율·고속 거리 재계산.
 - 키: `local.properties`의 `SEOUL_TRAFFIC_KEY` (서울 열린데이터광장 일반 인증키, 깃 업로드 금지). API는 xml만 지원, http(8088)라 `network_security_config.xml`에서 해당 도메인만 평문 허용.
-- 링크 모양: `assets/seoul_links.txt.gz` (국토부 표준노드링크 2026-11-11에서 서울 101~106등급만 추출, `tools/make_seoul_links.py`).
-- **막힌 점:** 서울시 교통정보의 링크 ID는 표준링크 ID와 다름(표준 ID로 조회하면 INFO-200). 서울시 "서비스링크 ↔ 표준링크 매핑" 자료를 받아 ID를 바꿔 끼운 뒤 `ENABLED = true`.
+- 링크 모양: `assets/seoul_links.bin` = 서울시 TOPIS 링크 좌표 (`LinkVerInfo`). 만드는 법:
+  1. `tools/교통링크_받기.bat` 실행 → 도로 514개(`LinkWithLoad`) → 링크 목록 → 좌표 → `tools/topis_raw.txt` (깃 제외)
+  2. `python3 tools/make_topis_links.py` → GRS80 TM → 위경도 변환해 asset 생성
+  - 국토부 표준링크 ID는 TOPIS ID와 달라 쓰지 않음 (`tools/make_seoul_links.py`는 참고용)
+- 표시: 경로 카드에 "정체 구간 N%"/"막힘 없음", 비교 헤더에 "서울 실시간 교통 반영", 결론 아래 반영 구간 비율.

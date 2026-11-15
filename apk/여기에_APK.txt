@@ -1,1 +1,1 @@
-이 폴더에 제출용 APK(팀명_길콕_release.apk)를 넣습니다.
+제출용 APK: 샛길연구소_길콕_release.apk (release, 서명됨). 다시 만들려면 루트의 제출용APK만들기.bat 실행.

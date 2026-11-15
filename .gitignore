@@ -35,3 +35,6 @@ gilkok-check.png
 # 공모전 제출용 APK는 apk/ 폴더에서만 허용
 !apk/
 !apk/*.apk
+
+# TOPIS 원본 좌표(가공 전)
+/tools/topis_raw.txt

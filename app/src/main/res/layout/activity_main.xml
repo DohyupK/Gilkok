@@ -95,7 +95,7 @@
                     android:layout_gravity="top|start" android:layout_margin="20dp" android:background="@drawable/map_chrome"
                     android:textColor="@color/white" android:textSize="17sp" android:maxLines="2" android:elevation="4dp"/>
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical"
-                    android:layout_gravity="end|center_vertical" android:layout_marginEnd="20dp">
+                    android:layout_gravity="start|center_vertical" android:layout_marginStart="20dp">
                     <com.google.android.material.button.MaterialButton android:id="@+id/zoom_in" android:layout_width="72dp" android:layout_height="72dp"
                         android:text="+" android:textSize="32sp" android:contentDescription="지도 확대"
                         app:backgroundTint="@color/road_surface2" android:textColor="@color/white" android:padding="0dp" app:cornerRadius="16dp"/>

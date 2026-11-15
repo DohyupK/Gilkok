@@ -12,7 +12,7 @@ import kotlin.math.cos
 
 /**
  * 서울시 실시간 도로소통정보(TOPIS, 열린데이터광장 TrafficInfo)로 경로 시간을 보정합니다.
- *  1) assets/seoul_links.txt.gz : 서울 도로 링크 모양 (표준노드링크에서 가공, 줄마다 "링크ID,lat lon;lat lon;...")
+ *  1) assets/seoul_links.bin : 서울 도로 링크 모양 (표준노드링크에서 가공, 줄마다 "링크ID,lat lon;lat lon;...")
  *  2) 경로의 각 구간을 가장 가까운 같은 방향 링크에 맞춤 (25m 이내, 방향 차 45° 이내)
  *  3) 맞춰진 링크의 현재 속도를 받아 시간 = 길이 ÷ 속도 로 다시 계산
  * 서울 밖이거나 키·데이터가 없으면 원래 경로를 그대로 돌려줍니다.
@@ -32,15 +32,15 @@ object SeoulTraffic {
     private val pool = Executors.newFixedThreadPool(6)
     private val main = Handler(Looper.getMainLooper())
 
-    // 서울시 링크 ID ↔ 표준링크 ID 매핑 데이터가 들어오기 전까지는 꺼 둠 (지금 데이터는 번호가 안 맞아 조회가 모두 실패)
-    const val ENABLED = false
+    // 링크 데이터: TOPIS LinkVerInfo (tools/교통링크_받기.bat → make_topis_links.py)
+    const val ENABLED = true
     fun available() = ENABLED && BuildConfig.SEOUL_TRAFFIC_KEY.isNotBlank()
 
     @Synchronized private fun load(context: Context): List<Link> {
         links?.let { return it }
         val out = ArrayList<Link>()
         runCatching {
-            GZIPInputStream(context.assets.open("seoul_links.txt.gz")).bufferedReader().forEachLine { line ->
+            GZIPInputStream(context.assets.open("seoul_links.bin")).bufferedReader().forEachLine { line ->
                 val c = line.indexOf(','); if (c < 0) return@forEachLine
                 val nums = line.substring(c + 1).split(';').flatMap { it.trim().split(' ').map(String::toDouble) }
                 if (nums.size >= 4) out += Link(line.substring(0, c), nums.toDoubleArray())
@@ -97,7 +97,7 @@ object SeoulTraffic {
 
     /** 경로들을 교통 반영 값으로 바꿔 메인 스레드로 돌려줍니다. 실패하면 원래 경로 그대로. */
     fun adjust(context: Context, routes: List<RouteOption>, callback: (List<RouteOption>) -> Unit) {
-        if (!available() || routes.none { it.source == RouteSource.OSRM }) { callback(routes); return }
+        if (!available() || routes.none { it.source == RouteSource.OSRM }) { android.util.Log.i("GilkokTraffic", "skip: available=${available()} sources=${routes.map { it.source }}"); callback(routes); return }
         val app = context.applicationContext
         pool.execute {
             val result = runCatching {
@@ -106,10 +106,11 @@ object SeoulTraffic {
                 // 1) 구간 → 링크
                 val matched = routes.map { r -> (1 until r.path.size).map { i -> match(all, r.path[i - 1], r.path[i]) } }
                 val ids = matched.flatten().filterNotNull().distinct().take(MAX_LINKS).toSet()
-                if (ids.isEmpty()) return@runCatching routes
+                if (ids.isEmpty()) { android.util.Log.i("GilkokTraffic", "no match: links=${all.size}"); return@runCatching routes }
                 // 2) 속도 병렬 조회
                 val futures = ids.associateWith { id -> pool.submit<Double?> { speed(app, id) } }
                 val v = futures.mapValues { runCatching { it.value.get() }.getOrNull() }
+                android.util.Log.i("GilkokTraffic", "links=${all.size} matched=${ids.size} speeds=${v.values.count { it != null }} sample=${v.entries.take(5)}")
                 // 3) 다시 계산
                 routes.mapIndexed { ri, r -> recompute(r, matched[ri], v) }
             }.getOrElse { android.util.Log.w("GilkokTraffic", "adjust failed", it); routes }
@@ -132,7 +133,7 @@ object SeoulTraffic {
                 if (kmh * 1.0 >= 70) hwM += len
             } else { sec += len * baseSecPerM; hwM += len * hwShare }
         }
-        if (liveM < total * 0.2) return r // 서울 구간이 거의 없으면 보정하지 않음
+        if (liveM <= 0.0) return r // 실시간 속도가 하나도 없으면 보정하지 않음
         val scale = r.distanceM / total
         return r.copy(
             durationS = sec * scale, congestedRatio = jamM / total, highwayM = hwM * scale,
