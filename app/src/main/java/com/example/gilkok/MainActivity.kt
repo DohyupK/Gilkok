@@ -138,9 +138,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.dest_label).setCompoundDrawablesRelativeWithIntrinsicBounds(dot(DEST),null,null,null)
         findViewById<TextView>(R.id.kok_label).setCompoundDrawablesRelativeWithIntrinsicBounds(dot(KOK),null,null,null)
         val legend=findViewById<LinearLayout>(R.id.map_legend)
-        listOf(dot(START) to "출발 (현재 위치)",dot(DEST) to "도착",dot(KOK) to "콕 지점",dot(PLACE) to "명소",bar(ROUTE_BASE) to "추천 경로",bar(ROUTE_GIL) to "길콕 경로").forEach{(icon,label)->
+        legend.removeAllViews()
+        listOf(dot(START) to "출발",dot(DEST) to "도착",dot(KOK) to "콕",dot(PLACE) to "명소",bar(ROUTE_BASE) to "추천",bar(ROUTE_GIL) to "길콕").forEach{(icon,label)->
             legend.addView(TextView(this).apply{
-                text=label;textSize=15f;setTextColor(android.graphics.Color.parseColor("#1B2B3D"))
+                text=label;textSize=15f;setTextColor(getColor(R.color.white))
                 setCompoundDrawablesRelativeWithIntrinsicBounds(icon,null,null,null);compoundDrawablePadding=dp(8)
                 gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(2),0,dp(2))})
         }
@@ -268,12 +269,12 @@ class MainActivity : AppCompatActivity() {
         chipKey=key
         val box=findViewById<LinearLayout>(R.id.kok_list);box.removeAllViews()
         koks.forEachIndexed{i,kok->
-            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;background=getDrawable(R.drawable.card_bg);setPadding(dp(20),dp(6),dp(8),dp(6))}
+            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;background=getDrawable(R.drawable.card_bg);setPadding(dp(16),dp(6),dp(8),dp(6))}
             row.addView(TextView(this).apply{
-                text=if(kok.place)"명소" else "콕";textSize=15f;setTypeface(typeface,Typeface.BOLD);gravity=Gravity.CENTER
+                text="${i+1}";textSize=16f;setTypeface(typeface,Typeface.BOLD);gravity=Gravity.CENTER
                 setTextColor(android.graphics.Color.parseColor(if(kok.place)"#FFFFFF" else "#101A28"))
-                background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(10).toFloat();setColor(android.graphics.Color.parseColor(if(kok.place)PLACE else KOK))}
-                setPadding(dp(10),dp(4),dp(10),dp(4))},LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(14)})
+                background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(android.graphics.Color.parseColor(if(kok.place)PLACE else KOK))}
+            },LinearLayout.LayoutParams(dp(34),dp(34)).apply{marginEnd=dp(12)})
             row.addView(TextView(this).apply{text=kok.name;textSize=19f;setTextColor(getColor(R.color.white));maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END},LinearLayout.LayoutParams(0,-2,1f))
             row.addView(MaterialButton(this,null,com.google.android.material.R.attr.materialButtonStyle).apply{
                 text="✕";isEnabled=!restricted;contentDescription="${kok.name} 지우기"
@@ -317,20 +318,33 @@ class MainActivity : AppCompatActivity() {
 
     private fun routeCard(i:Int,r:RouteOption,e:EnergyPrediction?,restricted:Boolean):View{
         val selected=i==chosen
-        val card=LinearLayout(this).apply{
-            orientation=LinearLayout.VERTICAL
+        val lineColor=android.graphics.Color.parseColor(if(i==0)ROUTE_BASE else ROUTE_GIL)
+        val shell=LinearLayout(this).apply{
+            orientation=LinearLayout.HORIZONTAL
             background=getDrawable(if(selected)R.drawable.card_selected else R.drawable.card_bg)
-            setPadding(dp(20),dp(16),dp(20),dp(16))
             setOnClickListener{if(!restricted && chosen!=i){chosen=i;if(poiOpen)closePois();map?.showRoutes(routes,chosen);comparisonKey="";render()}}
         }
+        shell.addView(View(this).apply{background=android.graphics.drawable.GradientDrawable().apply{setColor(lineColor)}},LinearLayout.LayoutParams(dp(6),-1))
+        val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(16),dp(16),dp(16))}
         val head=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        val lineColor=android.graphics.Color.parseColor(if(i==0)ROUTE_BASE else ROUTE_GIL)
-        head.addView(View(this).apply{background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(3).toFloat();setColor(lineColor)}},LinearLayout.LayoutParams(dp(28),dp(6)).apply{marginEnd=dp(10)})
-        head.addView(TextView(this).apply{text=r.title;textSize=19f;setTypeface(typeface,Typeface.BOLD);setTextColor(lineColor.let{c->if(selected)c else getColor(R.color.white)})},LinearLayout.LayoutParams(0,-2,1f))
-        val tag=when{r.koks.isEmpty()->"내비 추천 기준";r.passesAll->"콕 지점 통과 ✓";else->"콕 지점 ${r.passed}/${r.koks.size}곳만 통과"}
-        head.addView(TextView(this).apply{text=tag;textSize=15f;background=getDrawable(R.drawable.tag_bg);setTextColor(getColor(if(!r.passesAll)R.color.road_bad else R.color.white))})
+        head.addView(TextView(this).apply{text=r.title;textSize=19f;setTypeface(typeface,Typeface.BOLD);setTextColor(if(selected)lineColor else getColor(R.color.white))},LinearLayout.LayoutParams(0,-2,1f))
+        val tag=when{r.koks.isEmpty()->"내비 추천";r.passesAll->"통과 ✓";else->"${r.passed}/${r.koks.size}곳만"}
+        head.addView(TextView(this).apply{text=tag;textSize=15f;background=getDrawable(R.drawable.tag_bg);setTextColor(getColor(if(!r.passesAll)R.color.road_bad else R.color.road_good))})
         card.addView(head)
         card.addView(TextView(this).apply{text="${minutes(r.durationS)}분   ${fmt(r.distanceM/1000)} km";textSize=30f;setTypeface(typeface,Typeface.BOLD);setTextColor(getColor(R.color.white));setPadding(0,dp(6),0,dp(2))})
+        if(routes.size==2 && i==1){
+            val base=routes[0]
+            val dt=minutes(r.durationS)-minutes(base.durationS)
+            val de=(e?.kwh ?: 0.0)-(energies.getOrNull(0)?.kwh ?: 0.0)
+            val delta=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(0,dp(2),0,dp(4))}
+            fun chip(label:String,good:Boolean)=TextView(this).apply{
+                text=label;textSize=15f;setTextColor(getColor(if(good)R.color.road_good else R.color.road_gold))
+                background=getDrawable(R.drawable.tag_bg);setPadding(dp(10),dp(4),dp(10),dp(4))
+            }
+            delta.addView(chip(if(dt>=0)"+$dt분" else "${dt}분",dt<=0),LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(8)})
+            delta.addView(chip("${if(de>=0)"+" else "−"}${fmt(abs(de),2)} kWh",de<=0))
+            card.addView(delta)
+        }
         val congestion=(r.congestedRatio*100).roundToInt()
         card.addView(TextView(this).apply{text=if(r.source.hasTraffic)"정체·지체 구간 $congestion%" else "교통정보 없음 · 도로 기준 시간";textSize=17f;setTextColor(getColor(if(congestion>=40)R.color.road_gold else R.color.road_muted))})
         if(e!=null) card.addView(TextView(this).apply{
@@ -340,7 +354,8 @@ class MainActivity : AppCompatActivity() {
             text=if(poiOpen)"주변 명소 닫기" else "주변 명소 보기";textSize=17f;isEnabled=!restricted
             backgroundTintList=ColorStateList.valueOf(getColor(R.color.road_surface2));setTextColor(getColor(R.color.white))
             setOnClickListener{if(poiOpen)closePois() else {poiOpen=true;loadPois(r,poiTheme)}}},LinearLayout.LayoutParams(-1,dp(64)).apply{topMargin=dp(12)})
-        return card
+        shell.addView(card,LinearLayout.LayoutParams(0,-2,1f))
+        return shell
     }
 
     // ───────────────────────── 주변 명소 ─────────────────────────
@@ -480,6 +495,11 @@ class MainActivity : AppCompatActivity() {
         if(restricted && !lastRestricted){dialog?.dismiss();if(panel==2){showPanel(1);return}};lastRestricted=restricted
         val known=s?.restrictionAvailable==true
         text(R.id.global_status,when{!known->"차량 상태 확인 중";restricted->"주행 중 · 조작이 제한돼요";s?.recording==true->"정차 중 · 주행 기록 중";else->"정차 중"})
+        findViewById<View>(R.id.global_status_dot).background=getDrawable(when{
+            !known->R.drawable.status_dot_muted
+            restricted->R.drawable.status_dot_warn
+            else->R.drawable.status_dot_good
+        })
         text(R.id.route_mode,RouteSettings.mode(this).label)
         listOf(R.id.pick_destination,R.id.clear_destination,R.id.compare_routes,R.id.enable_map,R.id.report_history,R.id.route_mode).forEach{findViewById<View>(it).isEnabled=!restricted}
         val o=origin()
@@ -506,10 +526,10 @@ class MainActivity : AppCompatActivity() {
         // 주행 화면
         val snapshot=s?.snapshot ?: VehicleSnapshot()
         text(R.id.live_speed,snapshot.speedMps?.let{"${fmt(abs(it)*3.6,0)} km/h"} ?: "—")
-        text(R.id.live_efficiency,"전비   "+(snapshot.evKmPerKwh?.let{"${fmt(it)} km/kWh"} ?: snapshot.fuelLPer100Km?.let{"연비 ${fmt(it)} L/100km"} ?: "제공되지 않음"))
-        text(R.id.live_odometer,"누적 거리   "+(snapshot.odometerKm?.let{"${fmt(it)} km"} ?: "제공되지 않음"))
-        text(R.id.live_brake,"브레이크   "+(snapshot.brakePressed?.let{if(it)"밟음" else "놓음"} ?: "제공되지 않음"))
-        text(R.id.live_mode,"주행 모드   ${snapshot.drivingMode ?: "제공되지 않음"}")
+        text(R.id.live_efficiency,snapshot.evKmPerKwh?.let{"${fmt(it)} km/kWh"} ?: snapshot.fuelLPer100Km?.let{"${fmt(it)} L/100km"} ?: "제공되지 않음")
+        text(R.id.live_odometer,snapshot.odometerKm?.let{"${fmt(it)} km"} ?: "제공되지 않음")
+        text(R.id.live_brake,snapshot.brakePressed?.let{if(it)"밟음" else "놓음"} ?: "제공되지 않음")
+        text(R.id.live_mode,snapshot.drivingMode ?: "제공되지 않음")
         val active=s?.store?.active
         text(R.id.trip_state,when{s?.recording==true->"기록 중 · ${active?.samples?.size ?: 0}초 분량 · ${active?.destination ?: "목적지 없음"}";active!=null->"중단된 기록이 있습니다. 이어서 기록할 수 있어요";else->"경로 화면에서 안내를 시작하면 자동으로 기록돼요"})
         text(R.id.trip_prediction,active?.let{PredictionStore.get(this,it.id)}?.let{"출발 전 예측 ${fmt(it,2)} kWh · 도착 후 실제와 비교해요"} ?: "")
@@ -555,6 +575,7 @@ class MainActivity : AppCompatActivity() {
         reportKey=key
         if(trip==null) {
             text(R.id.report_pred_value,"—");text(R.id.report_pred_detail,"경로를 비교하고 안내를 시작하면, 도착 후 여기서 예측과 실제를 비교해요.")
+            text(R.id.report_accel_chip,"급가속 —");text(R.id.report_brake_chip,"급감속 —")
             text(R.id.report_text,"완료한 주행 기록이 없습니다.");text(R.id.energy_text,"");text(R.id.report_comparison,"");return
         }
         val report=TripAnalyzer.analyze(trip)
@@ -571,9 +592,11 @@ class MainActivity : AppCompatActivity() {
                 text(R.id.report_pred_detail,"$reason\n\n실제값: 이동 ${fmt(actual.distanceKm)} km ÷ 차량 전비 ${fmt(actual.kmPerKwh)} km/kWh\n이 결과는 다음 예측의 ‘내 주행 기록 기반’ 전비에 반영돼요.")
             }
         }
+        text(R.id.report_accel_chip,"급가속 ${report.hardAccelerations}회")
+        text(R.id.report_brake_chip,"급감속 ${report.hardBrakes}회")
         val withSpeed=trip.samples.count { it.value.speedMps!=null }
         val suggestion=when { withSpeed<2->"속도 데이터가 부족해 습관을 평가할 수 없어요."; report.hardBrakes>0->"앞차와 간격을 여유 있게 두면 급감속을 줄일 수 있어요."; report.hardAccelerations>0->"출발할 때 가속을 조금 더 부드럽게 해보세요."; else->"큰 가감속 없이 안정적으로 달렸어요." }
-        text(R.id.report_text,"${date(trip.startMs)} · ${trip.destination ?: "목적지 미설정"}\n${if(trip.crossing?.startsWith("kok:")==true)"콕 지점 ${trip.crossing!!.removePrefix("kok:").split("|").size}곳 경유" else "콕 지점 없이 주행"}\n\n${report.durationMinutes}분 · ${report.distanceKm?.let { "${fmt(it)} km" } ?: "거리 측정 불가"}\n급가속 ${report.hardAccelerations}회 · 급감속 ${report.hardBrakes}회\n속도 변동 ${report.speedVariabilityPercent?.let { "$it%" } ?: "계산 불가"}${if(trip.interrupted) "\n(중단·복구 이력이 있는 기록)" else ""}\n\n$suggestion")
+        text(R.id.report_text,"${date(trip.startMs)} · ${trip.destination ?: "목적지 미설정"}\n${if(trip.crossing?.startsWith("kok:")==true)"콕 지점 ${trip.crossing!!.removePrefix("kok:").split("|").size}곳 경유" else "콕 지점 없이 주행"}\n\n${report.durationMinutes}분 · ${report.distanceKm?.let { "${fmt(it)} km" } ?: "거리 측정 불가"}\n속도 변동 ${report.speedVariabilityPercent?.let { "$it%" } ?: "계산 불가"}${if(trip.interrupted) "\n(중단·복구 이력이 있는 기록)" else ""}\n\n$suggestion")
         val estimate=EnergyModel.estimate(trip,profile())
         text(R.id.energy_text,estimate?.let {
             "지금처럼   ${fmt(it.observedScenarioKwh,3)} kWh\n부드럽게   ${fmt(it.smoothScenarioKwh,3)} kWh   (${fmt(it.changePercent)}% 차이)\n\n물리 모델로 같은 정지 지점·거리를 유지한 채 속도만 완만하게 바꿔 본 가상 계산입니다. 계산 구간 ${fmt(it.coveredMeters/1000)} km · 포함률 ${it.coveragePercent}%"

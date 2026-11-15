@@ -104,7 +104,6 @@ object RouteSettings {
         val m = Mode.entries.getOrElse(prefs(c).getInt("mode", 0)) { Mode.OSRM }
         return if (m == Mode.KAKAO && kakaoKey(c).isBlank()) Mode.OSRM else m
     }
-    fun demo(c: Context) = mode(c) == Mode.DEMO
     fun save(c: Context, mode: Mode, key: String) = prefs(c).edit().putInt("mode", mode.ordinal).putString("kakao_key", key.trim()).apply()
     fun provider(c: Context): RouteProvider = when (mode(c)) {
         Mode.DEMO -> DemoRouteProvider()

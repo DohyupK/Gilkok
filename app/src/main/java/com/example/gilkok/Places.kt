@@ -23,7 +23,7 @@ class NaviLocationProvider(private val state: () -> NaviState) : LocationProvide
     }
 }
 
-enum class CrossingDirection(val label: String) { NORTH("강북 방향"), SOUTH("강남 방향") }
+enum class CrossingDirection { NORTH, SOUTH }
 
 /** Direction points are prototypes, never silently presented as verified road routing points. */
 fun BridgeOption.waypoint(direction: CrossingDirection): GeoPoint = when (this) {
@@ -46,10 +46,5 @@ object WaypointCatalog {
         val lat=p.getString("$key:lat",null)?.toDoubleOrNull()
         val lon=p.getString("$key:lon",null)?.toDoubleOrNull()
         return if(lat!=null && lon!=null) GeoPoint(lat,lon).takeIf { it.valid } ?: bridge.waypoint(direction) else bridge.waypoint(direction)
-    }
-    fun set(context:android.content.Context,bridge:BridgeOption,direction:CrossingDirection,point:GeoPoint) {
-        require(point.valid)
-        val key="${bridge.name}:${direction.name}"
-        context.getSharedPreferences("waypoints",0).edit().putString("$key:lat",point.latitude.toString()).putString("$key:lon",point.longitude.toString()).apply()
     }
 }
