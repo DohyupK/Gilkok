@@ -17,8 +17,6 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.module.http.HttpRequestUtil
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.SymbolLayer
-import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.PropertyFactory.*
 import org.maplibre.android.style.sources.GeoJsonSource
 
@@ -63,15 +61,17 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
     private var pois:List<Poi> = emptyList()
     private var highlighted:Int?=null
     private var renderKey=""
+    private var overlayKey=""
     private var centered=state?.isEmpty==false
     private var userMoved=state?.getBoolean("gilkok_follow",true)==false
     private var pendingFocus:GeoPoint?=null
     override var onPointSelected:((GeoPoint)->Unit)?=null
     override var onViewportChanged:(()->Unit)?=null
-    // 지도 위에 명소 번호·이름표를 안드로이드 뷰로 직접 올립니다 (지도 글꼴·레이어 문제와 무관하게 항상 보이도록).
+    // 지도 위에 명소·콕 번호표를 안드로이드 뷰로 직접 올립니다 (지도 글꼴·레이어 문제와 무관하게 항상 보이도록).
     private val container=android.widget.FrameLayout(context)
     private val overlay=android.widget.FrameLayout(context).apply { isClickable=false; isFocusable=false }
     private val poiViews=mutableListOf<View>()
+    private val kokViews=mutableListOf<View>()
     override val view:View get()=container
     override val ready:Boolean get()=style!=null
     override val zoom:Double get()=map?.cameraPosition?.zoom ?: 12.0
@@ -91,27 +91,27 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
             value.setMinZoomPreference(4.0); value.setMaxZoomPreference(18.0); value.prefetchZoomDelta=0
             if(state?.isEmpty!=false) value.cameraPosition=CameraPosition.Builder().target(LatLng(37.5665,126.9780)).zoom(12.0).build()
             val url=JSONObject.quote(ExternalServices.tileUrl(context))
-            val json="""{"version":8,"glyphs":"https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf","sources":{"osm":{"type":"raster","tiles":[$url],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#DDE3E8"}},{"id":"osm","type":"raster","source":"osm","paint":{"raster-fade-duration":0}}]}"""
+            // 동일 타일 URL 유지. 배경·채도만 낮춰 경로 색이 먼저 읽히게 함.
+            val json="""{"version":8,"glyphs":"https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf","sources":{"osm":{"type":"raster","tiles":[$url],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#9AA7B4"}},{"id":"osm","type":"raster","source":"osm","paint":{"raster-fade-duration":0,"raster-opacity":0.88,"raster-saturation":-0.35,"raster-contrast":-0.08}}]}"""
             value.setStyle(Style.Builder().fromJson(json)) { loaded ->
                 style=loaded
                 (listOf("current","destination","kok","place-wp","route-base","route-gil","poi-hl","poi-link")+(1..POI_SLOTS).map { "poi-$it" }).forEach { loaded.addSource(GeoJsonSource(it,empty())) }
                 // 두 경로 모두 굵게: 고른 경로가 조금 더 굵고 위에 그려짐. 굵기는 draw()에서 직접 바꿈.
-                loaded.addLayer(LineLayer("route-base-casing","route-base").withProperties(lineColor("#FFFFFF"),lineWidth(12f),lineCap("round"),lineJoin("round")))
-                loaded.addLayer(LineLayer("route-base-line","route-base").withProperties(lineColor(ROUTE_BASE),lineWidth(8f),lineCap("round"),lineJoin("round")))
-                loaded.addLayer(LineLayer("route-gil-casing","route-gil").withProperties(lineColor("#FFFFFF"),lineWidth(12f),lineCap("round"),lineJoin("round")))
-                loaded.addLayer(LineLayer("route-gil-line","route-gil").withProperties(lineColor(ROUTE_GIL),lineWidth(8f),lineCap("round"),lineJoin("round")))
+                loaded.addLayer(LineLayer("route-base-casing","route-base").withProperties(lineColor("#FFFFFF"),lineWidth(14f),lineCap("round"),lineJoin("round")))
+                loaded.addLayer(LineLayer("route-base-line","route-base").withProperties(lineColor(ROUTE_BASE),lineWidth(9f),lineCap("round"),lineJoin("round")))
+                loaded.addLayer(LineLayer("route-gil-casing","route-gil").withProperties(lineColor("#FFFFFF"),lineWidth(14f),lineCap("round"),lineJoin("round")))
+                loaded.addLayer(LineLayer("route-gil-line","route-gil").withProperties(lineColor(ROUTE_GIL),lineWidth(9f),lineCap("round"),lineJoin("round")))
                 // 고른 명소 ↔ 경로의 가장 가까운 지점: 점선
                 loaded.addLayer(LineLayer("poi-link-line","poi-link").withProperties(lineColor(PLACE),lineWidth(4f),lineDasharray(arrayOf(1.5f,1.5f))))
                 // 고른 명소: 크게 + 바깥 고리
                 loaded.addLayer(CircleLayer("poi-hl-halo","poi-hl").withProperties(circleColor(PLACE),circleRadius(30f),circleOpacity(.25f)))
                 loaded.addLayer(CircleLayer("poi-hl-dot","poi-hl").withProperties(circleColor(PLACE),circleRadius(19f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(4f)))
-                // 명소 후보: 번호마다 따로 그린 보라색 원 이미지 + 번호 소스 (글꼴·데이터 기반 표현식 없이 항상 보이게)
-                loaded.addLayer(CircleLayer("kok-point","kok").withProperties(circleColor(KOK),circleRadius(12f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(3f)))
-                loaded.addLayer(CircleLayer("place-wp-point","place-wp").withProperties(circleColor(PLACE),circleRadius(12f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(3f)))
+                loaded.addLayer(CircleLayer("kok-point","kok").withProperties(circleColor(KOK),circleRadius(13f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(3f)))
+                loaded.addLayer(CircleLayer("place-wp-point","place-wp").withProperties(circleColor(PLACE),circleRadius(13f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(3f)))
                 loaded.addLayer(CircleLayer("destination-point","destination").withProperties(circleColor(DEST),circleRadius(13f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(3f)))
                 loaded.addLayer(CircleLayer("current-halo","current").withProperties(circleColor("#1677FF"),circleRadius(23f),circleOpacity(.17f)))
                 loaded.addLayer(CircleLayer("current-dot","current").withProperties(circleColor("#1677FF"),circleRadius(12f),circleStrokeColor("#FFFFFF"),circleStrokeWidth(4f)))
-                renderKey=""; draw()
+                renderKey=""; overlayKey=""; draw()
                 pendingFocus?.let { move(it,15.0); pendingFocus=null }
                 onStatus("지도가 준비되었습니다"); onViewportChanged?.invoke()
             }
@@ -150,9 +150,32 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
         }
     }
     private fun dp(v:Int)=(v*context.resources.displayMetrics.density).toInt()
-    /** 명소마다 "번호 원 + 이름표" 뷰를 만듭니다. 터치는 지도로 그대로 넘어갑니다. */
+    private fun numberBadge(n:Int,color:String,on:Boolean):View {
+        val size=dp(if(on) 36 else 28)
+        return android.widget.TextView(context).apply {
+            text="$n"; setTextColor(android.graphics.Color.WHITE); textSize=if(on) 16f else 14f
+            setTypeface(typeface,android.graphics.Typeface.BOLD); gravity=android.view.Gravity.CENTER
+            background=android.graphics.drawable.GradientDrawable().apply {
+                shape=android.graphics.drawable.GradientDrawable.OVAL
+                setColor(android.graphics.Color.parseColor(color)); setStroke(dp(3),android.graphics.Color.WHITE)
+            }
+            elevation=dp(4).toFloat()
+            tag=size
+            layoutParams=android.widget.FrameLayout.LayoutParams(size,size)
+        }
+    }
+    /** 명소: 번호는 항상, 이름표는 고른 항목만. 콕: 방문 순서 번호. */
     private fun rebuildOverlay() {
-        overlay.removeAllViews(); poiViews.clear()
+        val key="${koks.joinToString { it.key+it.place }}|${pois.hashCode()}|$highlighted"
+        if(key==overlayKey && overlay.childCount>0) { updateOverlay(); return }
+        overlayKey=key
+        overlay.removeAllViews(); poiViews.clear(); kokViews.clear()
+        koks.forEachIndexed { i,kok ->
+            val color=if(kok.place) PLACE else KOK
+            val badge=numberBadge(i+1,color,false)
+            overlay.addView(badge)
+            kokViews+=badge
+        }
         pois.forEachIndexed { i,p ->
             val on=i==highlighted
             val row=android.widget.LinearLayout(context).apply {
@@ -166,21 +189,33 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
                     shape=android.graphics.drawable.GradientDrawable.OVAL; setColor(android.graphics.Color.parseColor(PLACE)); setStroke(dp(3),android.graphics.Color.WHITE) }
                 elevation=dp(4).toFloat()
             },android.widget.LinearLayout.LayoutParams(size,size))
-            row.addView(android.widget.TextView(context).apply {
-                text=p.name; textSize=if(on) 15f else 13f; maxLines=1; maxWidth=dp(160); ellipsize=android.text.TextUtils.TruncateAt.END
-                setTextColor(android.graphics.Color.parseColor("#1B2B3D")); if(on) setTypeface(typeface,android.graphics.Typeface.BOLD)
-                background=android.graphics.drawable.GradientDrawable().apply { cornerRadius=dp(8).toFloat(); setColor(android.graphics.Color.parseColor("#F2FFFFFF")); setStroke(dp(if(on) 2 else 1),android.graphics.Color.parseColor(PLACE)) }
-                setPadding(dp(8),dp(3),dp(8),dp(3)); elevation=dp(3).toFloat()
-            },android.widget.LinearLayout.LayoutParams(-2,-2).apply { marginStart=dp(4) })
+            if(on) {
+                row.addView(android.widget.TextView(context).apply {
+                    text=p.name; textSize=15f; maxLines=1; maxWidth=dp(160); ellipsize=android.text.TextUtils.TruncateAt.END
+                    setTextColor(android.graphics.Color.WHITE); setTypeface(typeface,android.graphics.Typeface.BOLD)
+                    background=android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius=dp(8).toFloat(); setColor(android.graphics.Color.parseColor("#E016212E"))
+                        setStroke(dp(2),android.graphics.Color.parseColor(PLACE))
+                    }
+                    setPadding(dp(8),dp(3),dp(8),dp(3)); elevation=dp(3).toFloat()
+                },android.widget.LinearLayout.LayoutParams(-2,-2).apply { marginStart=dp(4) })
+            }
             row.tag=size
             overlay.addView(row,android.widget.FrameLayout.LayoutParams(-2,-2))
             poiViews+=row
         }
         overlay.post { updateOverlay() }
     }
-    /** 지도가 움직일 때마다 번호 원의 중심이 명소 좌표에 오도록 위치를 다시 맞춥니다. */
+    /** 지도가 움직일 때마다 번호의 중심이 좌표에 오도록 위치를 다시 맞춥니다. */
     private fun updateOverlay() {
         val m=map ?: return
+        kokViews.forEachIndexed { i,v ->
+            val kok=koks.getOrNull(i) ?: return@forEachIndexed
+            val pt=m.projection.toScreenLocation(LatLng(kok.point.latitude,kok.point.longitude))
+            val size=(v.tag as? Int) ?: dp(28)
+            v.translationX=pt.x-size/2f; v.translationY=pt.y-size/2f
+            v.visibility=if(visible) View.VISIBLE else View.INVISIBLE
+        }
         poiViews.forEachIndexed { i,v ->
             val p=pois.getOrNull(i) ?: return@forEachIndexed
             val pt=m.projection.toScreenLocation(LatLng(p.point.latitude,p.point.longitude))
@@ -191,6 +226,7 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
     }
     override fun showPois(pois:List<Poi>,highlighted:Int?) {
         this.pois=pois;this.highlighted=highlighted
+        overlayKey="" // 하이라이트 변경 시 이름표 밀도 다시 구성
         rebuildOverlay()
         draw()
         val focusPoi=highlighted?.let { pois.getOrNull(it) }
@@ -206,21 +242,8 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
             userMoved=true; map?.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds,120),500)
         }
     }
-    /** 보라색 원 안에 흰 번호를 그린 비트맵 */
-    private fun numberIcon(n:Int):android.graphics.Bitmap {
-        val d=context.resources.displayMetrics.density
-        val size=(34*d).toInt()
-        val bmp=android.graphics.Bitmap.createBitmap(size,size,android.graphics.Bitmap.Config.ARGB_8888)
-        val c=android.graphics.Canvas(bmp)
-        val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-        paint.color=android.graphics.Color.WHITE; c.drawCircle(size/2f,size/2f,size/2f,paint)
-        paint.color=android.graphics.Color.parseColor(PLACE); c.drawCircle(size/2f,size/2f,size/2f-3*d,paint)
-        paint.color=android.graphics.Color.WHITE; paint.textSize=17*d; paint.isFakeBoldText=true; paint.textAlign=android.graphics.Paint.Align.CENTER
-        c.drawText("$n",size/2f,size/2f-(paint.descent()+paint.ascent())/2,paint)
-        return bmp
-    }
     private fun applyRouteWidths(style:Style) {
-        fun set(id:String,on:Boolean,casing:Boolean) { style.getLayer(id)?.setProperties(lineWidth(if(casing) (if(on) 15f else 12f) else (if(on) 10f else 7f))) }
+        fun set(id:String,on:Boolean,casing:Boolean) { style.getLayer(id)?.setProperties(lineWidth(if(casing) (if(on) 17f else 13f) else (if(on) 11f else 7.5f))) }
         set("route-base-casing",selected==0,true); set("route-base-line",selected==0,false)
         set("route-gil-casing",selected==1,true); set("route-gil-line",selected==1,false)
     }
@@ -240,6 +263,7 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
             val hl=highlighted?.let { pois.getOrNull(it) }
             style.getSourceAs<GeoJsonSource>("poi-hl")?.setGeoJson(collection(listOfNotNull(hl).map { pointFeature(it.point) }))
             style.getSourceAs<GeoJsonSource>("poi-link")?.setGeoJson(collection(listOfNotNull(hl).map { lineFeature(listOf(it.point,it.nearestOnRoute)) }))
+            rebuildOverlay()
         }
         if(!userMoved && location!=null) {
             val center=map?.cameraPosition?.target
@@ -268,6 +292,7 @@ class MapLibreProvider(private val context: Context, state: Bundle?, private val
         if(this.visible==visible) return
         this.visible=visible
         if(visible) {mapView.onStart();mapView.onResume()} else {mapView.onPause();mapView.onStop()}
+        updateOverlay()
     }
     override fun saveState(state:Bundle) {mapView.onSaveInstanceState(state);state.putBoolean("gilkok_follow",!userMoved)}
     override fun destroy() {setVisible(false);mapView.onDestroy()}

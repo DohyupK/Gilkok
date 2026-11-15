@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="road_rail">#0A1119</color>
     <color name="road_navy">#0F1822</color>
     <color name="road_surface">#16212E</color>
     <color name="road_surface2">#1F2D3D</color>
-    <color name="road_line">#2B3B4F</color>
     <color name="road_teal">#0E9F94</color>
     <color name="road_teal_dark">#0A776F</color>
     <color name="road_teal_bright">#3CD6C6</color>

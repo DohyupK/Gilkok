@@ -20,7 +20,6 @@ data class BridgeOption(val name: String, val latitude: Double, val longitude: D
         // Prototype bridge center points; routing to the correct carriageway needs field validation.
         val YEONGDONG = BridgeOption("영동대교", 37.5299444, 127.0570556)
         val CHEONGDAM = BridgeOption("청담대교", 37.5261, 127.0642)
-        val ALL = listOf(YEONGDONG, CHEONGDAM)
     }
 }
 
@@ -148,8 +147,6 @@ class NaviClient(private val context: Context, private val onState: (NaviState) 
             change { copy(message = "기본 내비 열기 실패: ${e.message ?: e.javaClass.simpleName}") }
         }
     }
-
-    fun setDestination(name:String,latitude:Double,longitude:Double) = requestDestination(Place(name,GeoPoint(latitude,longitude)))
 
     fun stop() {
         if (!active) return

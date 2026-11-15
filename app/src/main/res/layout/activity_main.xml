@@ -12,14 +12,18 @@
             android:text="길콕" android:textSize="28sp" android:textStyle="bold" android:textColor="@color/road_teal_bright"
             android:layout_marginBottom="28dp"/>
         <com.google.android.material.button.MaterialButton android:id="@+id/nav_route" style="@style/Widget.Gilkok.Button.Nav"
-            android:layout_width="match_parent" android:layout_height="80dp" android:text="경로" android:layout_marginBottom="8dp"/>
+            android:layout_width="match_parent" android:layout_height="80dp" android:text="경로" android:layout_marginBottom="8dp"
+            app:icon="@drawable/ic_nav_route" app:iconGravity="textTop" app:iconPadding="4dp" app:iconSize="22dp" app:iconTint="@null"/>
         <com.google.android.material.button.MaterialButton android:id="@+id/nav_trip" style="@style/Widget.Gilkok.Button.Nav"
-            android:layout_width="match_parent" android:layout_height="80dp" android:text="주행" android:layout_marginBottom="8dp"/>
+            android:layout_width="match_parent" android:layout_height="80dp" android:text="주행" android:layout_marginBottom="8dp"
+            app:icon="@drawable/ic_nav_trip" app:iconGravity="textTop" app:iconPadding="4dp" app:iconSize="22dp" app:iconTint="@null"/>
         <com.google.android.material.button.MaterialButton android:id="@+id/nav_report" style="@style/Widget.Gilkok.Button.Nav"
-            android:layout_width="match_parent" android:layout_height="80dp" android:text="분석"/>
+            android:layout_width="match_parent" android:layout_height="80dp" android:text="분석"
+            app:icon="@drawable/ic_nav_report" app:iconGravity="textTop" app:iconPadding="4dp" app:iconSize="22dp" app:iconTint="@null"/>
         <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
         <com.google.android.material.button.MaterialButton android:id="@+id/nav_settings" style="@style/Widget.Gilkok.Button.Nav"
-            android:layout_width="match_parent" android:layout_height="80dp" android:text="설정"/>
+            android:layout_width="match_parent" android:layout_height="80dp" android:text="설정"
+            app:icon="@drawable/ic_nav_settings" app:iconGravity="textTop" app:iconPadding="4dp" app:iconSize="22dp" app:iconTint="@null"/>
     </LinearLayout>
 
     <FrameLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1">
@@ -30,11 +34,17 @@
                 android:orientation="vertical" android:background="@color/road_surface">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal"
                     android:gravity="center_vertical" android:paddingHorizontal="24dp" android:paddingTop="20dp">
-                    <TextView android:id="@+id/global_status" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                        android:text="차량 상태 확인 중" android:textSize="17sp" android:textColor="@color/road_muted"/>
+                    <LinearLayout android:id="@+id/global_status_chip" android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical"
+                        android:background="@drawable/status_chip">
+                        <View android:id="@+id/global_status_dot" android:layout_width="10dp" android:layout_height="10dp"
+                            android:layout_marginEnd="10dp" android:background="@drawable/status_dot_muted"/>
+                        <TextView android:id="@+id/global_status" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                            android:text="차량 상태 확인 중" android:textSize="17sp" android:textColor="@color/road_muted"/>
+                    </LinearLayout>
                     <com.google.android.material.button.MaterialButton android:id="@+id/route_mode" style="@style/Widget.Gilkok.Button.Secondary"
                         android:layout_width="wrap_content" android:layout_height="48dp" android:minHeight="48dp" android:textSize="16sp"
-                        android:paddingHorizontal="16dp" android:text="데모 데이터" app:cornerRadius="24dp"/>
+                        android:layout_marginStart="12dp" android:paddingHorizontal="16dp" android:text="데모 데이터" app:cornerRadius="24dp"/>
                 </LinearLayout>
                 <ScrollView android:id="@+id/route_scroll" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
@@ -61,8 +71,9 @@
                             android:orientation="vertical" android:layout_marginTop="16dp"/>
                     </LinearLayout>
                 </ScrollView>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#332B3B4F"/>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
-                    android:background="@color/road_rail" android:padding="20dp">
+                    android:background="@color/road_rail" android:padding="20dp" android:elevation="6dp">
                     <TextView android:id="@+id/route_status" android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:textSize="16sp" android:textColor="@color/road_muted" android:maxLines="2" android:layout_marginBottom="10dp"/>
                     <com.google.android.material.button.MaterialButton android:id="@+id/start_guidance"
@@ -81,22 +92,26 @@
                         android:layout_marginTop="24dp" android:text="지도 켜기"/>
                 </LinearLayout>
                 <TextView android:id="@+id/map_status" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_gravity="top|start" android:layout_margin="20dp" android:background="@drawable/status_pill"
-                    android:textColor="#1B2B3D" android:textSize="17sp" android:maxLines="2" android:elevation="4dp"/>
+                    android:layout_gravity="top|start" android:layout_margin="20dp" android:background="@drawable/map_chrome"
+                    android:textColor="@color/white" android:textSize="17sp" android:maxLines="2" android:elevation="4dp"/>
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical"
                     android:layout_gravity="end|center_vertical" android:layout_marginEnd="20dp">
                     <com.google.android.material.button.MaterialButton android:id="@+id/zoom_in" android:layout_width="72dp" android:layout_height="72dp"
-                        android:text="+" android:textSize="32sp" android:contentDescription="지도 확대" app:backgroundTint="#F5F8FA" android:textColor="#1B2B3D" android:padding="0dp"/>
+                        android:text="+" android:textSize="32sp" android:contentDescription="지도 확대"
+                        app:backgroundTint="@color/road_surface2" android:textColor="@color/white" android:padding="0dp" app:cornerRadius="16dp"/>
                     <com.google.android.material.button.MaterialButton android:id="@+id/zoom_out" android:layout_width="72dp" android:layout_height="72dp" android:layout_marginTop="8dp"
-                        android:text="−" android:textSize="32sp" android:contentDescription="지도 축소" app:backgroundTint="#F5F8FA" android:textColor="#1B2B3D" android:padding="0dp"/>
+                        android:text="−" android:textSize="32sp" android:contentDescription="지도 축소"
+                        app:backgroundTint="@color/road_surface2" android:textColor="@color/white" android:padding="0dp" app:cornerRadius="16dp"/>
                     <com.google.android.material.button.MaterialButton android:id="@+id/recenter_map" android:layout_width="72dp" android:layout_height="72dp" android:layout_marginTop="8dp"
-                        android:contentDescription="현재 위치로 이동" app:icon="@drawable/ic_location" app:iconGravity="textStart" app:iconPadding="0dp" app:iconSize="28dp" android:padding="0dp"/>
+                        android:contentDescription="현재 위치로 이동" app:icon="@drawable/ic_location" app:iconGravity="textStart" app:iconPadding="0dp" app:iconSize="28dp"
+                        android:padding="0dp" app:backgroundTint="@color/road_surface2" app:cornerRadius="16dp" app:iconTint="@color/white"/>
                 </LinearLayout>
                 <LinearLayout android:id="@+id/map_legend" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_gravity="bottom|start" android:layout_margin="16dp" android:orientation="vertical"
-                    android:background="@drawable/status_pill" android:elevation="4dp"/>
+                    android:background="@drawable/map_chrome" android:elevation="4dp"/>
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="bottom|end"
-                    android:text="© OpenStreetMap contributors" android:textSize="14sp" android:textColor="#1B2B3D" android:background="#DDFFFFFF" android:padding="4dp"/>
+                    android:text="© OpenStreetMap contributors" android:textSize="14sp" android:textColor="@color/road_muted"
+                    android:background="@drawable/map_chrome" android:padding="4dp"/>
             </FrameLayout>
         </LinearLayout>
 
@@ -109,7 +124,7 @@
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="false">
                     <LinearLayout style="@style/Gilkok.Card" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="12dp">
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="현재 속도" android:textSize="17sp" android:textColor="@color/road_muted"/>
-                        <TextView android:id="@+id/live_speed" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—" android:textSize="80sp" android:textStyle="bold" android:textColor="@color/white"/>
+                        <TextView android:id="@+id/live_speed" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—" android:textSize="88sp" android:textStyle="bold" android:textColor="@color/white"/>
                         <TextView android:id="@+id/trip_prediction" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="18sp" android:textColor="@color/road_teal_bright" android:layout_marginBottom="16dp"/>
                         <com.google.android.material.button.MaterialButton android:id="@+id/start_trip" android:layout_width="match_parent" android:layout_height="72dp" android:text="주행 기록 시작"/>
                         <com.google.android.material.button.MaterialButton android:id="@+id/stop_trip" style="@style/Widget.Gilkok.Button.Secondary" android:layout_width="match_parent" android:layout_height="72dp" android:layout_marginTop="8dp" android:text="기록 마치고 분석 보기"/>
@@ -117,10 +132,30 @@
                     </LinearLayout>
                     <LinearLayout style="@style/Gilkok.Card" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="12dp">
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="차량 데이터 · Pleos Vehicle SDK" android:textSize="17sp" android:textColor="@color/road_muted" android:layout_marginBottom="12dp"/>
-                        <TextView android:id="@+id/live_efficiency" style="@style/Gilkok.Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"/>
-                        <TextView android:id="@+id/live_odometer" style="@style/Gilkok.Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"/>
-                        <TextView android:id="@+id/live_brake" style="@style/Gilkok.Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"/>
-                        <TextView android:id="@+id/live_mode" style="@style/Gilkok.Body" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="8dp"
+                                android:orientation="vertical" android:background="@drawable/metric_tile" android:padding="14dp">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="전비·연비" android:textSize="14sp" android:textColor="@color/road_muted"/>
+                                <TextView android:id="@+id/live_efficiency" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textSize="20sp" android:textColor="@color/white" android:textStyle="bold"/>
+                            </LinearLayout>
+                            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp"
+                                android:orientation="vertical" android:background="@drawable/metric_tile" android:padding="14dp">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="누적 거리" android:textSize="14sp" android:textColor="@color/road_muted"/>
+                                <TextView android:id="@+id/live_odometer" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textSize="20sp" android:textColor="@color/white" android:textStyle="bold"/>
+                            </LinearLayout>
+                        </LinearLayout>
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="12dp">
+                            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="8dp"
+                                android:orientation="vertical" android:background="@drawable/metric_tile" android:padding="14dp">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="브레이크" android:textSize="14sp" android:textColor="@color/road_muted"/>
+                                <TextView android:id="@+id/live_brake" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textSize="20sp" android:textColor="@color/white" android:textStyle="bold"/>
+                            </LinearLayout>
+                            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp"
+                                android:orientation="vertical" android:background="@drawable/metric_tile" android:padding="14dp">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="주행 모드" android:textSize="14sp" android:textColor="@color/road_muted"/>
+                                <TextView android:id="@+id/live_mode" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textSize="20sp" android:textColor="@color/white" android:textStyle="bold"/>
+                            </LinearLayout>
+                        </LinearLayout>
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:textSize="16sp" android:textColor="@color/road_muted"
                             android:text="기록 중에는 기본 내비로 이동해도 수집이 이어집니다. 기록은 기기 밖으로 전송되지 않습니다."/>
                     </LinearLayout>
@@ -139,11 +174,17 @@
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="false">
                     <LinearLayout style="@style/Gilkok.Card" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="12dp">
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="출발 전 예측 vs 실제" android:textSize="17sp" android:textColor="@color/road_muted"/>
-                        <TextView android:id="@+id/report_pred_value" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginVertical="8dp" android:textSize="34sp" android:textStyle="bold" android:textColor="@color/white"/>
+                        <TextView android:id="@+id/report_pred_value" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginVertical="8dp" android:textSize="40sp" android:textStyle="bold" android:textColor="@color/road_teal_bright"/>
                         <TextView android:id="@+id/report_pred_detail" style="@style/Gilkok.Body" android:layout_width="match_parent" android:layout_height="wrap_content"/>
                     </LinearLayout>
                     <LinearLayout style="@style/Gilkok.Card" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="12dp">
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="운전 습관" android:textSize="17sp" android:textColor="@color/road_muted" android:layout_marginBottom="8dp"/>
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="12dp">
+                            <TextView android:id="@+id/report_accel_chip" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="8dp"
+                                android:background="@drawable/metric_tile" android:padding="12dp" android:text="급가속 —" android:textSize="18sp" android:textColor="@color/white" android:gravity="center"/>
+                            <TextView android:id="@+id/report_brake_chip" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp"
+                                android:background="@drawable/metric_tile" android:padding="12dp" android:text="급감속 —" android:textSize="18sp" android:textColor="@color/white" android:gravity="center"/>
+                        </LinearLayout>
                         <TextView android:id="@+id/report_text" style="@style/Gilkok.Body" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="완료한 주행이 없습니다"/>
                     </LinearLayout>
                 </LinearLayout>
