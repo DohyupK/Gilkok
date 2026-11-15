@@ -1,5 +1,7 @@
 # 길콕 (Gilkok)
 
+<img src="docs/app_icon.webp" width="96" alt="길콕 아이콘">
+
 > **내가 아는 길을 지도에서 콕 찍으면, 그 길로 가는 경로를 내비 추천 경로와 바로 비교해 주는 Pleos Connect 앱**
 
 2026 현대자동차그룹 차량용 앱 개발 공모전 출품작 · 팀 **샛길연구소** · Pleos Connect (Android Automotive)
